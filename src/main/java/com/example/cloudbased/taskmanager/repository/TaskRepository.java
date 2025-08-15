@@ -10,6 +10,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByUser(User user);
     List<Task> findByUserOrderBySortOrderAsc(User user);
     List<Task> findByUserAndDueDateBetween(User user, LocalDateTime startDate, LocalDateTime endDate);
+    List<Task> findByUserAndDueDateAfter(User user, LocalDateTime startDate);
     List<Task> findByUserAndTaskListIdOrderBySortOrderAsc(User user, Long listId);
 }
 

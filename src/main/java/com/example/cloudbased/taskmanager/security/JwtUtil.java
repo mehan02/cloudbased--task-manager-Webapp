@@ -16,7 +16,7 @@ import java.util.function.Function;
 public class JwtUtil {
     
     private final Key secret = Keys.hmacShaKeyFor("your-secret-key-must-be-at-least-256-bits-long-for-hs256".getBytes());
-    private final long expiration = 3600000; // 1 hour
+    private final long expiration = 604800000; // 7 days
     
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);

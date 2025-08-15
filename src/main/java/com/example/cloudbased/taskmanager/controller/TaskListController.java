@@ -39,7 +39,22 @@ public class TaskListController {
         if (user == null) {
             return ResponseEntity.status(401).build();
         }
-        return ResponseEntity.ok(taskListRepository.findByUserOrderByCreatedAtDesc(user));
+        
+        List<TaskList> lists = taskListRepository.findByUserOrderByCreatedAtDesc(user);
+        
+        // Create clean TaskList objects without circular references
+        List<TaskList> cleanLists = lists.stream().map(list -> {
+            TaskList cleanList = new TaskList();
+            cleanList.setId(list.getId());
+            cleanList.setName(list.getName());
+            cleanList.setDescription(list.getDescription());
+            cleanList.setColor(list.getColor());
+            cleanList.setCreatedAt(list.getCreatedAt());
+            cleanList.setUpdatedAt(list.getUpdatedAt());
+            return cleanList;
+        }).collect(java.util.stream.Collectors.toList());
+        
+        return ResponseEntity.ok(cleanLists);
     }
 
     @PostMapping
@@ -49,7 +64,18 @@ public class TaskListController {
             return ResponseEntity.status(401).build();
         }
         taskList.setUser(user);
-        return ResponseEntity.ok(taskListRepository.save(taskList));
+        TaskList savedList = taskListRepository.save(taskList);
+        
+        // Create a clean TaskList object without circular references
+        TaskList cleanList = new TaskList();
+        cleanList.setId(savedList.getId());
+        cleanList.setName(savedList.getName());
+        cleanList.setDescription(savedList.getDescription());
+        cleanList.setColor(savedList.getColor());
+        cleanList.setCreatedAt(savedList.getCreatedAt());
+        cleanList.setUpdatedAt(savedList.getUpdatedAt());
+        
+        return ResponseEntity.ok(cleanList);
     }
 
     @PutMapping("/{id}")
@@ -74,7 +100,18 @@ public class TaskListController {
             taskList.setColor((String) updates.get("color"));
         }
 
-        return ResponseEntity.ok(taskListRepository.save(taskList));
+        TaskList savedList = taskListRepository.save(taskList);
+        
+        // Create a clean TaskList object without circular references
+        TaskList cleanList = new TaskList();
+        cleanList.setId(savedList.getId());
+        cleanList.setName(savedList.getName());
+        cleanList.setDescription(savedList.getDescription());
+        cleanList.setColor(savedList.getColor());
+        cleanList.setCreatedAt(savedList.getCreatedAt());
+        cleanList.setUpdatedAt(savedList.getUpdatedAt());
+        
+        return ResponseEntity.ok(cleanList);
     }
 
     @DeleteMapping("/{id}")
