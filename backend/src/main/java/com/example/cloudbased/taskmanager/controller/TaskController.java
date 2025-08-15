@@ -233,7 +233,15 @@ public class TaskController {
             task.setDescription((String) updates.get("description"));
         }
         if (updates.containsKey("status")) {
-            task.setStatus(Task.TaskStatus.valueOf((String) updates.get("status")));
+            Task.TaskStatus newStatus = Task.TaskStatus.valueOf((String) updates.get("status"));
+            task.setStatus(newStatus);
+            
+            // Set completedAt timestamp when task is completed or cleared
+            if (newStatus == Task.TaskStatus.COMPLETED) {
+                task.setCompletedAt(LocalDateTime.now());
+            } else if (newStatus == Task.TaskStatus.PENDING) {
+                task.setCompletedAt(null); // Clear completedAt when task is marked as pending
+            }
         }
         if (updates.containsKey("priority")) {
             task.setPriority(Task.TaskPriority.valueOf((String) updates.get("priority")));
