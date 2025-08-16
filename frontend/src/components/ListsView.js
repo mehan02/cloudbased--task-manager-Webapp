@@ -146,7 +146,7 @@ function ListsView() {
     }
   }, []);
 
-  const fetchTasksForList = async (listId) => {
+  const fetchTasksForList = useCallback(async (listId) => {
     if (!listId) return;
     try {
       console.log("Fetching tasks for list:", listId);
@@ -161,7 +161,7 @@ function ListsView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchLists();
@@ -171,7 +171,7 @@ function ListsView() {
     if (selectedList) {
       fetchTasksForList(selectedList.id);
     }
-  }, [selectedList]);
+  }, [selectedList, fetchTasksForList]);
 
   // Close priority dropdown when clicking outside
   useEffect(() => {

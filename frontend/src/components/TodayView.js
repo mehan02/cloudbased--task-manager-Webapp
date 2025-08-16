@@ -122,7 +122,7 @@ function TodayView() {
     onConfirm: null
   });
 
-  const fetchTodayTasks = async () => {
+  const fetchTodayTasks = useCallback(async () => {
     try {
       console.log("Fetching today's tasks...");
       setLoading(true);
@@ -140,7 +140,7 @@ function TodayView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const fetchLists = async () => {
     try {
@@ -158,7 +158,7 @@ function TodayView() {
     console.log("TodayView mounted, fetching tasks and lists...");
     fetchTodayTasks();
     fetchLists();
-  }, []);
+  }, [fetchTodayTasks]);
 
   // Close priority dropdown when clicking outside
   useEffect(() => {

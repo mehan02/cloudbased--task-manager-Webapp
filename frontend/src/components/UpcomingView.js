@@ -63,7 +63,7 @@ function UpcomingView() {
     currentStatus: ""
   });
 
-  const fetchUpcomingTasks = async () => {
+  const fetchUpcomingTasks = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -75,11 +75,11 @@ function UpcomingView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchUpcomingTasks();
-  }, []);
+  }, [fetchUpcomingTasks]);
 
   const toggleComplete = async (taskId, currentStatus) => {
     console.log("toggleComplete called with taskId:", taskId, "currentStatus:", currentStatus);
