@@ -35,23 +35,31 @@ pipeline {
             }
         }
 
-        stage('Build & Push Docker Images') {
+        stage('Build & Push Backend Docker Image') {
             steps {
                 withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
                     script {
                         sh 'echo $DOCKER_PASS | docker login -u mehan02 --password-stdin'
-
-                        // Backend image
                         sh '''
                         docker build -t mehan02/my-backend:latest ./backend
                         docker push mehan02/my-backend:latest
                         '''
+                        sh 'docker logout'
+                    }
+                }
+            }
+        }
 
-                        // Frontend image
+        stage('Build & Push Frontend Docker Image') {
+            steps {
+                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
+                    script {
+                        sh 'echo $DOCKER_PASS | docker login -u mehan02 --password-stdin'
                         sh '''
                         docker build -t mehan02/my-frontend:latest ./frontend
                         docker push mehan02/my-frontend:latest
                         '''
+                        sh 'docker logout'
                     }
                 }
             }
@@ -60,14 +68,9 @@ pipeline {
         stage('Deploy to Cloud Run') {
             steps {
                 script {
-                    // Check if gcloud is installed
                     sh 'which gcloud || (echo "gcloud CLI not found!" && exit 1)'
-
                     withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
-                        // Authenticate
                         sh 'gcloud auth activate-service-account --key-file=$GCP_KEY'
-
-                        // Set GCP project  
                         sh 'gcloud config set project taskmanager-mehan'
 
                         // Deploy backend
@@ -99,3 +102,5 @@ pipeline {
         }
     }
 }
+
+
