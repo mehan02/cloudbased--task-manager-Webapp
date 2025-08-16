@@ -4,14 +4,20 @@ pipeline {
     tools {
         jdk 'jdk17'
         gradle 'gradle7'
-        nodejs 'Node_18'    
+        nodejs 'Node_18'
+    }
+
+    environment {
+        DOCKER_USER = 'mehan02'
+        GCP_PROJECT = 'YOUR_GCP_PROJECT_ID'  // Replace with your GCP project ID
+        CLOUD_RUN_REGION = 'us-central1'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    credentialsId: 'github-credentials', 
+                    credentialsId: 'github-credentials',
                     url: 'https://github.com/mehan02/cloudbased--task-manager-.git'
             }
         }
@@ -39,19 +45,19 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
                     script {
-                        //  Login to Docker Hub
-                        sh('echo $DOCKER_PASS | docker login -u mehan02 --password-stdin')
+                        // Docker login
+                        sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
 
-                        // Build & Push Backend Image
+                        // Backend Docker build & push
                         sh """
-                        docker build -t mehan02/my-backend:latest ./backend
-                        docker push mehan02/my-backend:latest
+                        docker build -t $DOCKER_USER/my-backend:latest ./backend
+                        docker push $DOCKER_USER/my-backend:latest
                         """
 
-                        // Build & Push Frontend Image
+                        // Frontend Docker build & push
                         sh """
-                        docker build -t mehan02/my-frontend:latest ./frontend
-                        docker push mehan02/my-frontend:latest
+                        docker build -t $DOCKER_USER/my-frontend:latest ./frontend
+                        docker push $DOCKER_USER/my-frontend:latest
                         """
                     }
                 }
@@ -62,23 +68,24 @@ pipeline {
             steps {
                 withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
                     script {
-                        //  Authenticate gcloud with the service account key
+                        // Authenticate gcloud
                         sh 'gcloud auth activate-service-account --key-file=$GCP_KEY'
+                        sh 'gcloud config set project $GCP_PROJECT'
 
-                        // Deploy Backend to Cloud Run
+                        // Deploy backend
                         sh """
                         gcloud run deploy taskmanager-backend-service \
-                            --image docker.io/mehan02/my-backend:latest \
-                            --region us-central1 \
+                            --image docker.io/$DOCKER_USER/my-backend:latest \
+                            --region $CLOUD_RUN_REGION \
                             --platform managed \
                             --allow-unauthenticated
                         """
 
-                        // Deploy Frontend to Cloud Run
+                        // Deploy frontend
                         sh """
                         gcloud run deploy taskmanager-frontend-service \
-                            --image docker.io/mehan02/my-frontend:latest \
-                            --region us-central1 \
+                            --image docker.io/$DOCKER_USER/my-frontend:latest \
+                            --region $CLOUD_RUN_REGION \
                             --platform managed \
                             --allow-unauthenticated
                         """
@@ -90,7 +97,7 @@ pipeline {
 
     post {
         always {
-            echo ' Pipeline finished!'
+            echo 'Pipeline finished!'
         }
     }
 }
