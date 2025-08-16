@@ -27,7 +27,6 @@ pipeline {
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
-                    // Use NodeJS wrapper provided by Jenkins
                     nodejs(nodeJSInstallationName: 'Node_18') {
                         sh 'npm install'
                         sh 'npm run build'
@@ -38,24 +37,29 @@ pipeline {
 
         stage('Deploy to Cloud Run') {
             steps {
-                script {
-                    // Deploy backend
-                    sh """
-                    gcloud run deploy taskmanager-backend-service \
-                        --image docker.io/mehan02/my-backend:latest \
-                        --region us-central1 \
-                        --platform managed \
-                        --allow-unauthenticated
-                    """
+                withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
+                    script {
+                        // Authenticate gcloud with the service account key
+                        sh 'gcloud auth activate-service-account --key-file=$GCP_KEY'
 
-                    // Deploy frontend
-                    sh """
-                    gcloud run deploy taskmanager-frontend-service \
-                        --image docker.io/mehan02/my-frontend:latest \
-                        --region us-central1 \
-                        --platform managed \
-                        --allow-unauthenticated
-                    """
+                        // Deploy backend
+                        sh """
+                        gcloud run deploy taskmanager-backend-service \
+                            --image docker.io/mehan02/my-backend:latest \
+                            --region us-central1 \
+                            --platform managed \
+                            --allow-unauthenticated
+                        """
+
+                        // Deploy frontend
+                        sh """
+                        gcloud run deploy taskmanager-frontend-service \
+                            --image docker.io/mehan02/my-frontend:latest \
+                            --region us-central1 \
+                            --platform managed \
+                            --allow-unauthenticated
+                        """
+                    }
                 }
             }
         }
@@ -67,3 +71,4 @@ pipeline {
         }
     }
 }
+
