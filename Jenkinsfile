@@ -2,15 +2,16 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USER = "mehan02"   // 🔹 your DockerHub username
+        DOCKERHUB_USER = "mehan02"  
     }
 
-    stages {
-        stage('Checkout Code') {
-            steps {
-                git branch: 'main', url: 'https://github.com/YOUR-USERNAME/YOUR-REPO.git'
-            }
-        }
+    stage('Checkout Code') {
+    steps {
+        git branch: 'main',
+            credentialsId: 'github-credentials',  
+            url: 'https://github.com/mehan02/cloudbased--task-manager-.git'
+    }
+}
 
         stage('Build Backend Image') {
             steps {
