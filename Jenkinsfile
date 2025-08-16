@@ -2,8 +2,9 @@ pipeline {
     agent any
 
     tools {
-        jdk 'jdk17'        // make sure you installed JDK 17 in Jenkins "Global Tool Configuration"
-        gradle 'gradle7'   // same for Gradle
+        jdk 'jdk17'
+        gradle 'gradle7'   
+        nodejs 'Node_18'
     }
 
     stages {
