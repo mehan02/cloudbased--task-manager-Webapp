@@ -74,15 +74,13 @@ pipeline {
             parallel {
                 stage('Backend Docker') {
                     steps {
-                        withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
-                            script {
-                                sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                                sh '''
-                                docker build --pull -t $DOCKER_USER/my-backend:latest ./backend
-                                docker push $DOCKER_USER/my-backend:latest
-                                '''
-                                sh 'docker logout'
-                            }
+                                 withCredentials([usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                                    sh 'docker build --pull --no-cache -t $DOCKER_USER/my-backend:latest ./backend'
+                                    sh 'docker push $DOCKER_USER/my-backend:latest'
+                                    sh 'docker logout'
+                                }
+
                         }
                     }
                 }
