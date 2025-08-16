@@ -1,10 +1,8 @@
 pipeline {
     agent any
     environment {
-        DOCKER_REGISTRY = "docker.io"
-        // Secure credential binding without interpolation
-        DOCKER_USER = credentials('docker-hub-pass').username
-        DOCKER_PASS = credentials('docker-hub-pass').password
+        // Use Jenkins credentials binding syntax
+        DOCKER_CREDS = credentials('docker-hub-pass')
     }
 
     stages {
@@ -32,11 +30,11 @@ pipeline {
 
         stage('Docker Login') {
             steps {
-                // Secure credential usage with single quotes
+                // Use single quotes to prevent credential exposure
                 sh '''
-                    echo "$DOCKER_PASS" | docker login \
-                        -u "$DOCKER_USER" \
-                        --password-stdin "$DOCKER_REGISTRY"
+                    echo "$DOCKER_CREDS_PSW" | docker login \
+                        -u "$DOCKER_CREDS_USR" \
+                        --password-stdin
                 '''
             }
         }
@@ -46,11 +44,10 @@ pipeline {
                 stage('Backend Image') {
                     steps {
                         dir('backend') {
-                            // Using shell commands instead of docker object
                             sh '''
                                 docker build --pull --no-cache \
-                                    -t "$DOCKER_USER/my-backend:latest" .
-                                docker push "$DOCKER_USER/my-backend:latest"
+                                    -t "$DOCKER_CREDS_USR/my-backend:latest" .
+                                docker push "$DOCKER_CREDS_USR/my-backend:latest"
                             '''
                         }
                     }
@@ -60,8 +57,8 @@ pipeline {
                         dir('frontend') {
                             sh '''
                                 docker build --pull --no-cache \
-                                    -t "$DOCKER_USER/my-frontend:latest" .
-                                docker push "$DOCKER_USER/my-frontend:latest"
+                                    -t "$DOCKER_CREDS_USR/my-frontend:latest" .
+                                docker push "$DOCKER_CREDS_USR/my-frontend:latest"
                             '''
                         }
                     }
