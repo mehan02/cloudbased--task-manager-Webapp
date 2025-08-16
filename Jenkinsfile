@@ -4,14 +4,14 @@ pipeline {
     tools {
         jdk 'jdk17'
         gradle 'gradle7'
-        nodejs 'Node_18'
+        nodejs 'Node_20'
     }
 
     stages {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    credentialsId: 'github-token', // Update with your Jenkins GitHub token ID
+                    credentialsId: 'github-token',
                     url: 'https://github.com/mehan02/cloudbased--task-manager-.git'
             }
         }
@@ -27,7 +27,7 @@ pipeline {
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
-                    nodejs(nodeJSInstallationName: 'Node_18') {
+                    nodejs(nodeJSInstallationName: 'Node_20') {
                         sh 'npm install'
                         sh 'npm run build'
                     }
@@ -73,7 +73,6 @@ pipeline {
                         sh 'gcloud auth activate-service-account --key-file=$GCP_KEY'
                         sh 'gcloud config set project taskmanager-mehan'
 
-                        // Deploy backend
                         sh '''
                         gcloud run deploy taskmanager-backend-service \
                             --image docker.io/mehan02/my-backend:latest \
@@ -82,7 +81,6 @@ pipeline {
                             --allow-unauthenticated
                         '''
 
-                        // Deploy frontend
                         sh '''
                         gcloud run deploy taskmanager-frontend-service \
                             --image docker.io/mehan02/my-frontend:latest \
