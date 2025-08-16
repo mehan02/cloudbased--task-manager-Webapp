@@ -1,50 +1,41 @@
 pipeline {
     agent any
 
-    environment {
-        DOCKERHUB_USER = "mehan02"  
+    tools {
+        jdk 'jdk17'        // make sure you installed JDK 17 in Jenkins "Global Tool Configuration"
+        gradle 'gradle7'   // same for Gradle
     }
 
-    stage('Checkout Code') {
-    steps {
-        git branch: 'main',
-            credentialsId: 'github-credentials',  
-            url: 'https://github.com/mehan02/cloudbased--task-manager-.git'
-    }
-}
-
-        stage('Build Backend Image') {
+    stages {
+        stage('Checkout Code') {
             steps {
-                sh '''
-                cd backend
-                docker build -t $DOCKERHUB_USER/taskmanager-backend:latest .
-                docker push $DOCKERHUB_USER/taskmanager-backend:latest
-                '''
+                git branch: 'main',
+                    credentialsId: 'github-credentials',
+                    url: 'https://github.com/mehan02/cloudbased--task-manager-.git'
             }
         }
 
-        stage('Build Frontend Image') {
+        stage('Build Backend') {
             steps {
-                sh '''
-                cd frontend
-                docker build -t $DOCKERHUB_USER/taskmanager-frontend:latest .
-                docker push $DOCKERHUB_USER/taskmanager-frontend:latest
-                '''
+                dir('backend') {
+                    sh './gradlew clean build'
+                }
             }
         }
 
-        stage('Deploy Containers') {
+        stage('Build Frontend') {
             steps {
-                sh '''
-                docker stop taskmanager-backend || true
-                docker rm taskmanager-backend || true
-                docker stop taskmanager-frontend || true
-                docker rm taskmanager-frontend || true
-
-                docker run -d --name taskmanager-backend -p 8080:8080 $DOCKERHUB_USER/taskmanager-backend:latest
-                docker run -d --name taskmanager-frontend -p 3000:80 $DOCKERHUB_USER/taskmanager-frontend:latest
-                '''
+                dir('frontend') {
+                    sh 'npm install'
+                    sh 'npm run build'
+                }
             }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished!'
         }
     }
 }
