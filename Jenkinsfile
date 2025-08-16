@@ -11,7 +11,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    credentialsId: 'd70b0f8c3ad408bb5dc926f4d2e9cab2', 
+                    credentialsId: 'github-credentials', 
                     url: 'https://github.com/mehan02/cloudbased--task-manager-.git'
             }
         }
