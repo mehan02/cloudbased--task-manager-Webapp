@@ -41,14 +41,14 @@ pipeline {
 
         stage('Build Projects') {
             parallel {
-                stage('Build Backend') {
+                'Build Backend': {
                     steps {
                         dir('backend') {
                             sh './gradlew clean build --parallel --info'
                         }
                     }
                 }
-                stage('Build Frontend') {
+                'Build Frontend': {
                     steps {
                         dir('frontend') {
                             nodejs(nodeJSInstallationName: 'Node_20') {
@@ -72,25 +72,23 @@ pipeline {
 
         stage('Docker Build & Push') {
             parallel {
-                stage('Backend Docker') {
+                'Backend Docker': {
                     steps {
-                                 withCredentials([usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                                    sh 'docker build --pull --no-cache -t $DOCKER_USER/my-backend:latest ./backend'
-                                    sh 'docker push $DOCKER_USER/my-backend:latest'
-                                    sh 'docker logout'
-                                }
-
+                        withCredentials([usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                            sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                            sh 'docker build --pull --no-cache -t $DOCKER_USER/my-backend:latest ./backend'
+                            sh 'docker push $DOCKER_USER/my-backend:latest'
+                            sh 'docker logout'
                         }
                     }
                 }
-                stage('Frontend Docker') {
+                'Frontend Docker': {
                     steps {
                         withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
                             script {
                                 sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
                                 sh '''
-                                docker build --pull -t $DOCKER_USER/my-frontend:latest ./frontend
+                                docker build --pull --no-cache -t $DOCKER_USER/my-frontend:latest ./frontend
                                 docker push $DOCKER_USER/my-frontend:latest
                                 '''
                                 sh 'docker logout'
@@ -126,10 +124,3 @@ pipeline {
                 }
             }
         }
-    }
-
-    post {
-        always {
-            echo 'Pipeline finished!'
-        }
-    }
