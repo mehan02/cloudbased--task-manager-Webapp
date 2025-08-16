@@ -7,6 +7,10 @@ pipeline {
         nodejs 'Node_20'
     }
 
+    environment {
+        DOCKER_USER = 'mehan02'
+    }
+
     stages {
         stage('Checkout Code') {
             steps {
@@ -16,50 +20,56 @@ pipeline {
             }
         }
 
-        stage('Build Backend') {
-            steps {
-                dir('backend') {
-                    sh './gradlew clean build'
+        stage('Build Projects') {
+            parallel {
+                stage('Build Backend') {
+                    steps {
+                        dir('backend') {
+                            sh './gradlew clean build --parallel --info'
+                        }
+                    }
                 }
-            }
-        }
-
-        stage('Build Frontend') {
-            steps {
-                dir('frontend') {
-                    nodejs(nodeJSInstallationName: 'Node_20') {
-                        sh 'npm install'
-                        sh 'npm run build'
+                stage('Build Frontend') {
+                    steps {
+                        dir('frontend') {
+                            nodejs(nodeJSInstallationName: 'Node_20') {
+                                sh 'npm ci' // faster and deterministic than npm install
+                                sh 'npm run build'
+                            }
+                        }
                     }
                 }
             }
         }
 
-        stage('Build & Push Backend Docker Image') {
-            steps {
-                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
-                    script {
-                        sh 'echo $DOCKER_PASS | docker login -u mehan02 --password-stdin'
-                        sh '''
-                        docker build -t mehan02/my-backend:latest ./backend
-                        docker push mehan02/my-backend:latest
-                        '''
-                        sh 'docker logout'
+        stage('Docker Build & Push') {
+            parallel {
+                stage('Backend Docker') {
+                    steps {
+                        withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
+                            script {
+                                sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                                sh '''
+                                docker build --pull --no-cache -t $DOCKER_USER/my-backend:latest ./backend
+                                docker push $DOCKER_USER/my-backend:latest
+                                '''
+                                sh 'docker logout'
+                            }
+                        }
                     }
                 }
-            }
-        }
-
-        stage('Build & Push Frontend Docker Image') {
-            steps {
-                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
-                    script {
-                        sh 'echo $DOCKER_PASS | docker login -u mehan02 --password-stdin'
-                        sh '''
-                        docker build -t mehan02/my-frontend:latest ./frontend
-                        docker push mehan02/my-frontend:latest
-                        '''
-                        sh 'docker logout'
+                stage('Frontend Docker') {
+                    steps {
+                        withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
+                            script {
+                                sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                                sh '''
+                                docker build --pull --no-cache -t $DOCKER_USER/my-frontend:latest ./frontend
+                                docker push $DOCKER_USER/my-frontend:latest
+                                '''
+                                sh 'docker logout'
+                            }
+                        }
                     }
                 }
             }
@@ -67,23 +77,21 @@ pipeline {
 
         stage('Deploy to Cloud Run') {
             steps {
-                script {
-                    sh 'which gcloud || (echo "gcloud CLI not found!" && exit 1)'
-                    withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
+                withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
+                    script {
                         sh 'gcloud auth activate-service-account --key-file=$GCP_KEY'
                         sh 'gcloud config set project taskmanager-mehan'
 
                         sh '''
                         gcloud run deploy taskmanager-backend-service \
-                            --image docker.io/mehan02/my-backend:latest \
+                            --image docker.io/$DOCKER_USER/my-backend:latest \
                             --region us-central1 \
                             --platform managed \
                             --allow-unauthenticated
                         '''
-
                         sh '''
                         gcloud run deploy taskmanager-frontend-service \
-                            --image docker.io/mehan02/my-frontend:latest \
+                            --image docker.io/$DOCKER_USER/my-frontend:latest \
                             --region us-central1 \
                             --platform managed \
                             --allow-unauthenticated
@@ -100,5 +108,3 @@ pipeline {
         }
     }
 }
-
-
