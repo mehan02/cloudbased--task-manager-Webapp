@@ -4,7 +4,14 @@ pipeline {
     tools {
         jdk 'jdk17'
         gradle 'gradle7'
-        nodejs 'Node_18'    
+        nodejs 'Node_18'
+    }
+
+    environment {
+        BACKEND_IMAGE = "docker.io/mehan02/my-backend:latest"
+        FRONTEND_IMAGE = "docker.io/mehan02/my-frontend:latest"
+        GCP_PROJECT = "taskmanager-mehan"  
+        REGION = "us-central1"
     }
 
     stages {
@@ -35,18 +42,39 @@ pipeline {
             }
         }
 
+        stage('Build & Push Docker Images') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials',
+                                                  usernameVariable: 'DOCKER_USER',
+                                                  passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+                    # Build & push backend
+                    docker build -t $BACKEND_IMAGE ./backend
+                    docker push $BACKEND_IMAGE
+
+                    # Build & push frontend
+                    docker build -t $FRONTEND_IMAGE ./frontend
+                    docker push $FRONTEND_IMAGE
+                    """
+                }
+            }
+        }
+
         stage('Deploy to Cloud Run') {
             steps {
                 withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
                     script {
-                        // Authenticate gcloud with the service account key
+                        // Authenticate gcloud
                         sh 'gcloud auth activate-service-account --key-file=$GCP_KEY'
+                        sh 'gcloud config set project $GCP_PROJECT'
 
                         // Deploy backend
                         sh """
                         gcloud run deploy taskmanager-backend-service \
-                            --image docker.io/mehan02/my-backend:latest \
-                            --region us-central1 \
+                            --image $BACKEND_IMAGE \
+                            --region $REGION \
                             --platform managed \
                             --allow-unauthenticated
                         """
@@ -54,8 +82,8 @@ pipeline {
                         // Deploy frontend
                         sh """
                         gcloud run deploy taskmanager-frontend-service \
-                            --image docker.io/mehan02/my-frontend:latest \
-                            --region us-central1 \
+                            --image $FRONTEND_IMAGE \
+                            --region $REGION \
                             --platform managed \
                             --allow-unauthenticated
                         """
