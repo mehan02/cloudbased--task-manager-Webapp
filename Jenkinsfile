@@ -7,18 +7,11 @@ pipeline {
         nodejs 'Node_18'
     }
 
-    environment {
-        BACKEND_IMAGE = "docker.io/mehan02/my-backend:latest"
-        FRONTEND_IMAGE = "docker.io/mehan02/my-frontend:latest"
-        GCP_PROJECT = "taskmanager-mehan"  
-        REGION = "us-central1"
-    }
-
     stages {
         stage('Checkout Code') {
             steps {
                 git branch: 'main',
-                    credentialsId: 'github-credentials', 
+                    credentialsId: 'github-token', // Update with your Jenkins GitHub token ID
                     url: 'https://github.com/mehan02/cloudbased--task-manager-.git'
             }
         }
@@ -42,51 +35,61 @@ pipeline {
             }
         }
 
-        stage('Build & Push Docker Images') {
+        stage('Build & Push Backend Docker Image') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials',
-                                                  usernameVariable: 'DOCKER_USER',
-                                                  passwordVariable: 'DOCKER_PASS')]) {
-                    sh """
-                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
+                    script {
+                        sh 'echo $DOCKER_PASS | docker login -u mehan02 --password-stdin'
+                        sh '''
+                        docker build -t mehan02/my-backend:latest ./backend
+                        docker push mehan02/my-backend:latest
+                        '''
+                        sh 'docker logout'
+                    }
+                }
+            }
+        }
 
-                    # Build & push backend
-                    docker build -t $BACKEND_IMAGE ./backend
-                    docker push $BACKEND_IMAGE
-
-                    # Build & push frontend
-                    docker build -t $FRONTEND_IMAGE ./frontend
-                    docker push $FRONTEND_IMAGE
-                    """
+        stage('Build & Push Frontend Docker Image') {
+            steps {
+                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
+                    script {
+                        sh 'echo $DOCKER_PASS | docker login -u mehan02 --password-stdin'
+                        sh '''
+                        docker build -t mehan02/my-frontend:latest ./frontend
+                        docker push mehan02/my-frontend:latest
+                        '''
+                        sh 'docker logout'
+                    }
                 }
             }
         }
 
         stage('Deploy to Cloud Run') {
             steps {
-                withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
-                    script {
-                        // Authenticate gcloud
+                script {
+                    sh 'which gcloud || (echo "gcloud CLI not found!" && exit 1)'
+                    withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
                         sh 'gcloud auth activate-service-account --key-file=$GCP_KEY'
-                        sh 'gcloud config set project $GCP_PROJECT'
+                        sh 'gcloud config set project taskmanager-mehan'
 
                         // Deploy backend
-                        sh """
+                        sh '''
                         gcloud run deploy taskmanager-backend-service \
-                            --image $BACKEND_IMAGE \
-                            --region $REGION \
+                            --image docker.io/mehan02/my-backend:latest \
+                            --region us-central1 \
                             --platform managed \
                             --allow-unauthenticated
-                        """
+                        '''
 
                         // Deploy frontend
-                        sh """
+                        sh '''
                         gcloud run deploy taskmanager-frontend-service \
-                            --image $FRONTEND_IMAGE \
-                            --region $REGION \
+                            --image docker.io/mehan02/my-frontend:latest \
+                            --region us-central1 \
                             --platform managed \
                             --allow-unauthenticated
-                        """
+                        '''
                     }
                 }
             }
@@ -99,4 +102,5 @@ pipeline {
         }
     }
 }
+
 
