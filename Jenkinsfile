@@ -1,17 +1,21 @@
 pipeline {
     agent any
+    environment {
+        DOCKER_REGISTRY = "docker.io"
+        DOCKER_CREDS = credentials('docker-hub-pass') // Auto-injects DOCKER_CREDS_USR and DOCKER_CREDS_PSW
+    }
 
     stages {
         stage('Build Projects') {
             parallel {
-                stage('backendBuild') {
+                stage('Backend Build') {
                     steps {
                         dir('backend') {
                             sh './gradlew clean build --parallel --info'
                         }
                     }
                 }
-                stage('frontendBuild') {
+                stage('Frontend Build') {
                     steps {
                         dir('frontend') {
                             nodejs(nodeJSInstallationName: 'Node_20') {
@@ -24,38 +28,46 @@ pipeline {
             }
         }
 
+        stage('Docker Login') {
+            steps {
+                script {
+                    sh """
+                    echo ${env.DOCKER_CREDS_PSW} | docker login \
+                        -u ${env.DOCKER_CREDS_USR} \
+                        --password-stdin ${env.DOCKER_REGISTRY}
+                    """
+                }
+            }
+        }
+
         stage('Docker Build & Push') {
             parallel {
-                stage('backendDocker') {
+                stage('Backend Image') {
                     steps {
-                        withCredentials([usernamePassword(
-                            credentialsId: 'docker-hub-pass', 
-                            usernameVariable: 'DOCKER_USER', 
-                            passwordVariable: 'DOCKER_PASS'
-                        )]) {
-                            sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                            sh 'docker build --pull --no-cache -t $DOCKER_USER/my-backend:latest ./backend'
-                            sh 'docker push $DOCKER_USER/my-backend:latest'
-                            sh 'docker logout'
+                        script {
+                            def backendImage = docker.build("${env.DOCKER_CREDS_USR}/my-backend:latest", "--pull --no-cache ./backend")
+                            backendImage.push()
                         }
                     }
                 }
-                stage('frontendDocker') {
+                stage('Frontend Image') {
                     steps {
-                        withCredentials([usernamePassword(
-                            credentialsId: 'docker-hub-pass', 
-                            usernameVariable: 'DOCKER_USER', 
-                            passwordVariable: 'DOCKER_PASS'
-                        )]) {
-                            sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
-                            sh 'docker build --pull --no-cache -t $DOCKER_USER/my-frontend:latest ./frontend'
-                            sh 'docker push $DOCKER_USER/my-frontend:latest'
-                            sh 'docker logout'
+                        script {
+                            def frontendImage = docker.build("${env.DOCKER_CREDS_USR}/my-frontend:latest", "--pull --no-cache ./frontend")
+                            frontendImage.push()
                         }
                     }
                 }
             }
         }
     }
-}
 
+    post {
+        always {
+            sh 'docker logout'
+        }
+        cleanup {
+            cleanWs() // Clean workspace after build
+        }
+    }
+}
