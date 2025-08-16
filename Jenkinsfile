@@ -2,7 +2,9 @@ pipeline {
     agent any
     environment {
         DOCKER_REGISTRY = "docker.io"
-        DOCKER_CREDS = credentials('docker-hub-pass') // Auto-injects DOCKER_CREDS_USR and DOCKER_CREDS_PSW
+        // Secure credential binding without interpolation
+        DOCKER_USER = credentials('docker-hub-pass').username
+        DOCKER_PASS = credentials('docker-hub-pass').password
     }
 
     stages {
@@ -30,13 +32,12 @@ pipeline {
 
         stage('Docker Login') {
             steps {
-                script {
-                    sh """
-                    echo ${env.DOCKER_CREDS_PSW} | docker login \
-                        -u ${env.DOCKER_CREDS_USR} \
-                        --password-stdin ${env.DOCKER_REGISTRY}
-                    """
-                }
+                // Secure credential usage with single quotes
+                sh '''
+                    echo "$DOCKER_PASS" | docker login \
+                        -u "$DOCKER_USER" \
+                        --password-stdin "$DOCKER_REGISTRY"
+                '''
             }
         }
 
@@ -44,17 +45,24 @@ pipeline {
             parallel {
                 stage('Backend Image') {
                     steps {
-                        script {
-                            def backendImage = docker.build("${env.DOCKER_CREDS_USR}/my-backend:latest", "--pull --no-cache ./backend")
-                            backendImage.push()
+                        dir('backend') {
+                            // Using shell commands instead of docker object
+                            sh '''
+                                docker build --pull --no-cache \
+                                    -t "$DOCKER_USER/my-backend:latest" .
+                                docker push "$DOCKER_USER/my-backend:latest"
+                            '''
                         }
                     }
                 }
                 stage('Frontend Image') {
                     steps {
-                        script {
-                            def frontendImage = docker.build("${env.DOCKER_CREDS_USR}/my-frontend:latest", "--pull --no-cache ./frontend")
-                            frontendImage.push()
+                        dir('frontend') {
+                            sh '''
+                                docker build --pull --no-cache \
+                                    -t "$DOCKER_USER/my-frontend:latest" .
+                                docker push "$DOCKER_USER/my-frontend:latest"
+                            '''
                         }
                     }
                 }
@@ -65,9 +73,7 @@ pipeline {
     post {
         always {
             sh 'docker logout'
-        }
-        cleanup {
-            cleanWs() // Clean workspace after build
+            cleanWs()
         }
     }
 }
