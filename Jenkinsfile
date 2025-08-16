@@ -4,7 +4,7 @@ pipeline {
     tools {
         jdk 'jdk17'
         gradle 'gradle7'
-        nodejs 'Node_18'   // Make sure this exists in Jenkins "Global Tool Configuration"
+        nodejs 'Node_18'    
     }
 
     stages {
@@ -67,4 +67,3 @@ pipeline {
         }
     }
 }
-
