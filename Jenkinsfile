@@ -2,7 +2,7 @@ pipeline {
     agent any
     environment {
         DOCKER_CREDS = credentials('docker-hub-pass')
-        PROD_SERVER = "ubuntu@34.93.252.145"            
+        PROD_SERVER = "ubuntu@34.93.252.145"
         DB_HOST = "34.14.211.97"
         DB_PORT = "5432"
         DB_NAME = "taskmanager"
@@ -13,12 +13,11 @@ pipeline {
         stage('Verify Tools') {
             steps {
                 script {
-                    // Verify Docker access
                     sh '''
-                        if ! docker ps &> /dev/null; then
-                            echo "ERROR: Docker not accessible. Ensure Jenkins user has proper permissions."
-                            exit 1
-                        fi
+                        echo "Checking Docker access..."
+                        docker ps
+                        docker --version
+                        echo "Docker accessible!"
                     '''
                 }
             }
@@ -39,7 +38,6 @@ pipeline {
                     steps {
                         dir('frontend') {
                             script {
-                                // Fallback Node.js installation if not configured in Jenkins
                                 try {
                                     nodejs(nodeJSInstallationName: 'Node_20') {
                                         sh 'npm ci'
@@ -89,7 +87,7 @@ pipeline {
 
         stage('Deploy to Production') {
             when { 
-                branch 'main'  // Safety: Only deploy from main branch
+                branch 'main'
             }
             steps {
                 sshagent(['gcp-prod-server']) {
@@ -99,7 +97,7 @@ pipeline {
                                 # Docker login
                                 echo "${DOCKER_CREDS_PSW}" | docker login -u "${DOCKER_CREDS_USR}" --password-stdin
                                 
-                                # Update containers
+                                # Pull latest images
                                 docker pull ${DOCKER_CREDS_USR}/task-backend:latest
                                 docker pull ${DOCKER_CREDS_USR}/task-frontend:latest
                                 
@@ -109,13 +107,14 @@ pipeline {
                                 docker stop task-frontend || true
                                 docker rm task-frontend || true
                                 
-                                # Start new containers
+                                # Run Backend container with DB credentials
                                 docker run -d --name task-backend -p 8080:8080 \\
                                     -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \\
                                     -e SPRING_DATASOURCE_USERNAME=${DB_USER} \\
                                     -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \\
                                     ${DOCKER_CREDS_USR}/task-backend:latest
                                 
+                                # Run Frontend container
                                 docker run -d --name task-frontend -p 80:80 \\
                                     ${DOCKER_CREDS_USR}/task-frontend:latest
                             '
@@ -133,3 +132,4 @@ pipeline {
         }
     }
 }
+:
