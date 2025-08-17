@@ -69,24 +69,29 @@ pipeline {
             when {
                 branch 'main'  // Only deploy from main branch
             }
-          stage('Deploy to Production Server') {
-    when {
-        branch 'main'
-    }
-    steps {
-        sshagent(['prod-server-ssh']) {
-            sh '''
-            ssh -o StrictHostKeyChecking=no ubuntu@<YOUR_SERVER_IP> '
-                docker pull mehan02/my-frontend:latest &&
-                docker stop my-frontend || true &&
-                docker rm my-frontend || true &&
-                docker run -d -p 80:80 --name my-frontend mehan02/my-frontend:latest
-            '
-            '''
+            steps {
+                sshagent(['gcp-prod-server']) {
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no '"'"${PROD_SERVER}"'"' '
+                            # Docker operations
+                            echo "'"'"${DOCKER_CREDS_PSW}"'"'" | docker login -u "'"'"${DOCKER_CREDS_USR}"'"'" --password-stdin
+                            docker pull "'"'"${DOCKER_CREDS_USR}"'"'"/my-backend:latest
+                            docker pull "'"'"${DOCKER_CREDS_USR}"'"'"/my-frontend:latest
+                            
+                            # Stop and remove existing containers
+                            docker stop task-backend || true
+                            docker rm task-backend || true
+                            docker stop task-frontend || true
+                            docker rm task-frontend || true
+                            
+                            # Start new containers
+                            docker run -d --name task-backend -p 8080:8080 "'"'"${DOCKER_CREDS_USR}"'"'"/my-backend:latest
+                            docker run -d --name task-frontend -p 80:80 "'"'"${DOCKER_CREDS_USR}"'"'"/my-frontend:latest
+                        '
+                    '''
+                }
+            }
         }
-    }
-}
-
     }
 
     post {
