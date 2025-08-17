@@ -1,8 +1,13 @@
 pipeline {
     agent any
     environment {
-        DOCKER_CREDS = credentials('docker-hub-pass')
-        PROD_SERVER = "ubuntu@34.14.197.81"
+        DOCKER_CREDS = credentials('docker-hub-pass')   // DockerHub credentials
+        PROD_SERVER = "ubuntu@34.93.252.145"            // Replace with your NEW VM external IP
+        DB_HOST = "34.14.211.97"                        // Cloud SQL public IP (or private if using VPC)
+        DB_PORT = "5432"
+        DB_NAME = "taskmanager"
+        DB_USER = "db_user"
+        DB_PASS = credentials('cloudsql-db-pass')       // Store DB password in Jenkins credentials
     }
 
     stages {
@@ -45,8 +50,8 @@ pipeline {
                         dir('backend') {
                             sh '''
                                 docker build --pull --no-cache \
-                                    -t "$DOCKER_CREDS_USR/my-backend:latest" .
-                                docker push "$DOCKER_CREDS_USR/my-backend:latest"
+                                    -t "$DOCKER_CREDS_USR/task-backend:latest" .
+                                docker push "$DOCKER_CREDS_USR/task-backend:latest"
                             '''
                         }
                     }
@@ -56,8 +61,8 @@ pipeline {
                         dir('frontend') {
                             sh '''
                                 docker build --pull --no-cache \
-                                    -t "$DOCKER_CREDS_USR/my-frontend:latest" .
-                                docker push "$DOCKER_CREDS_USR/my-frontend:latest"
+                                    -t "$DOCKER_CREDS_USR/task-frontend:latest" .
+                                docker push "$DOCKER_CREDS_USR/task-frontend:latest"
                             '''
                         }
                     }
@@ -66,25 +71,30 @@ pipeline {
         }
         
         stage('Deploy to Production Server') {
-            // Removed branch restriction - will deploy from any branch
             steps {
                 sshagent(['gcp-prod-server']) {
                     sh '''
-                        ssh -o StrictHostKeyChecking=no '"'"${PROD_SERVER}"'"' '
-                            # Docker operations
-                            echo "'"'"${DOCKER_CREDS_PSW}"'"'" | docker login -u "'"'"${DOCKER_CREDS_USR}"'"'" --password-stdin
-                            docker pull "'"'"${DOCKER_CREDS_USR}"'"'"/my-backend:latest
-                            docker pull "'"'"${DOCKER_CREDS_USR}"'"'"/my-frontend:latest
+                        ssh -o StrictHostKeyChecking=no ${PROD_SERVER} '
+                            echo "${DOCKER_CREDS_PSW}" | docker login -u "${DOCKER_CREDS_USR}" --password-stdin
                             
-                            # Stop and remove existing containers
-                            docker stop task-backend || true
-                            docker rm task-backend || true
-                            docker stop task-frontend || true
-                            docker rm task-frontend || true
+                            # Pull latest images
+                            docker pull ${DOCKER_CREDS_USR}/task-backend:latest
+                            docker pull ${DOCKER_CREDS_USR}/task-frontend:latest
                             
-                            # Start new containers
-                            docker run -d --name task-backend -p 8080:8080 "'"'"${DOCKER_CREDS_USR}"'"'"/my-backend:latest
-                            docker run -d --name task-frontend -p 80:80 "'"'"${DOCKER_CREDS_USR}"'"'"/my-frontend:latest
+                            # Stop old containers
+                            docker stop task-backend || true && docker rm task-backend || true
+                            docker stop task-frontend || true && docker rm task-frontend || true
+                            
+                            # Run Backend (Spring Boot)
+                            docker run -d --name task-backend -p 8080:8080 \
+                                -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
+                                -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
+                                -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \
+                                ${DOCKER_CREDS_USR}/task-backend:latest
+                            
+                            # Run Frontend (React)
+                            docker run -d --name task-frontend -p 80:80 \
+                                ${DOCKER_CREDS_USR}/task-frontend:latest
                         '
                     '''
                 }
@@ -94,8 +104,9 @@ pipeline {
 
     post {
         always {
-            sh 'docker logout'
+            sh 'docker logout || true'
             cleanWs()
         }
     }
 }
+
