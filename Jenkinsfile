@@ -104,7 +104,7 @@ pipeline {
                             docker rm task-frontend || true
 
                             # Run backend container
-                            docker run -d --name task-backend -p 8080:8080 \\
+                            docker run -d --name task-backend -p 8081:8080 \\
                                 -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \\
                                 -e SPRING_DATASOURCE_USERNAME=${DB_USER} \\
                                 -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \\
