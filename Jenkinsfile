@@ -1,94 +1,95 @@
 pipeline {
     agent any
-
-    tools {
-        jdk 'jdk17'
-        gradle 'gradle7'
-        nodejs 'Node_18'
+    environment {
+        DOCKER_CREDS = credentials('docker-hub-pass')
+        PROD_SERVER = "ubuntu@34.93.252.145"            
+        DB_HOST = "34.14.211.97"
+        DB_PORT = "5432"
+        DB_NAME = "taskmanager"
+        DB_USER = "db_user"
     }
 
     stages {
-        stage('Checkout Code') {
-            steps {
-                git branch: 'main',
-                    credentialsId: 'github-token', // Update with your Jenkins GitHub token ID
-                    url: 'https://github.com/mehan02/cloudbased--task-manager-.git'
-            }
-        }
-
-        stage('Build Backend') {
-            steps {
-                dir('backend') {
-                    sh './gradlew clean build'
+        stage('Build Projects') {
+            parallel {
+                stage('Backend Build') {
+                    steps {
+                        dir('backend') {
+                            withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS')]) {
+                                sh './gradlew clean build --parallel --info -Dspring.datasource.password=$DB_PASS'
+                            }
+                        }
+                    }
                 }
-            }
-        }
-
-        stage('Build Frontend') {
-            steps {
-                dir('frontend') {
-                    nodejs(nodeJSInstallationName: 'Node_18') {
-                        sh 'npm install'
-                        sh 'npm run build'
+                stage('Frontend Build') {
+                    steps {
+                        dir('frontend') {
+                            nodejs(nodeJSInstallationName: 'Node_20') {
+                                sh 'npm ci'
+                                sh 'npm run build'
+                            }
+                        }
                     }
                 }
             }
         }
 
-        stage('Build & Push Backend Docker Image') {
+        stage('Docker Login') {
             steps {
-                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
-                    script {
-                        sh 'echo $DOCKER_PASS | docker login -u mehan02 --password-stdin'
-                        sh '''
-                        docker build -t mehan02/my-backend:latest ./backend
-                        docker push mehan02/my-backend:latest
-                        '''
-                        sh 'docker logout'
+                sh '''
+                    echo "$DOCKER_CREDS_PSW" | docker login \
+                        -u "$DOCKER_CREDS_USR" \
+                        --password-stdin
+                '''
+            }
+        }
+
+        stage('Docker Build & Push') {
+            parallel {
+                stage('Backend Image') {
+                    steps {
+                        dir('backend') {
+                            sh '''
+                                docker build --pull --no-cache \
+                                    -t "$DOCKER_CREDS_USR/task-backend:latest" .
+                                docker push "$DOCKER_CREDS_USR/task-backend:latest"
+                            '''
+                        }
+                    }
+                }
+                stage('Frontend Image') {
+                    steps {
+                        dir('frontend') {
+                            sh '''
+                                docker build --pull --no-cache \
+                                    -t "$DOCKER_CREDS_USR/task-frontend:latest" .
+                                docker push "$DOCKER_CREDS_USR/task-frontend:latest"
+                            '''
+                        }
                     }
                 }
             }
         }
 
-        stage('Build & Push Frontend Docker Image') {
+        stage('Deploy to Production Server') {
             steps {
-                withCredentials([string(credentialsId: 'docker-hub-pass', variable: 'DOCKER_PASS')]) {
-                    script {
-                        sh 'echo $DOCKER_PASS | docker login -u mehan02 --password-stdin'
+                sshagent(['gcp-prod-server']) {
+                    withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS')]) {
                         sh '''
-                        docker build -t mehan02/my-frontend:latest ./frontend
-                        docker push mehan02/my-frontend:latest
-                        '''
-                        sh 'docker logout'
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Cloud Run') {
-            steps {
-                script {
-                    sh 'which gcloud || (echo "gcloud CLI not found!" && exit 1)'
-                    withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GCP_KEY')]) {
-                        sh 'gcloud auth activate-service-account --key-file=$GCP_KEY'
-                        sh 'gcloud config set project taskmanager-mehan'
-
-                        // Deploy backend
-                        sh '''
-                        gcloud run deploy taskmanager-backend-service \
-                            --image docker.io/mehan02/my-backend:latest \
-                            --region us-central1 \
-                            --platform managed \
-                            --allow-unauthenticated
-                        '''
-
-                        // Deploy frontend
-                        sh '''
-                        gcloud run deploy taskmanager-frontend-service \
-                            --image docker.io/mehan02/my-frontend:latest \
-                            --region us-central1 \
-                            --platform managed \
-                            --allow-unauthenticated
+                            ssh -o StrictHostKeyChecking=no ${PROD_SERVER} '
+                                echo "${DOCKER_CREDS_PSW}" | docker login -u "${DOCKER_CREDS_USR}" --password-stdin
+                                docker pull ${DOCKER_CREDS_USR}/task-backend:latest
+                                docker pull ${DOCKER_CREDS_USR}/task-frontend:latest
+                                docker stop task-backend || true && docker rm task-backend || true
+                                docker stop task-frontend || true && docker rm task-frontend || true
+                                docker run -d --name task-backend -p 8080:8080 \
+                                    -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \
+                                    -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
+                                    -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \
+                                    ${DOCKER_CREDS_USR}/task-backend:latest
+                                docker run -d --name task-frontend -p 80:80 \
+                                    ${DOCKER_CREDS_USR}/task-frontend:latest
+                            '
                         '''
                     }
                 }
@@ -98,9 +99,8 @@ pipeline {
 
     post {
         always {
-            echo 'Pipeline finished!'
+            sh 'docker logout || true'
+            cleanWs()
         }
     }
 }
-
-
