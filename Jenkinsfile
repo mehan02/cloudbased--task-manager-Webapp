@@ -86,14 +86,10 @@ pipeline {
         }
 
         stage('Deploy to Production') {
-            when { 
-                branch 'main'
-            }
             steps {
-                // SSH deployment using Jenkins private key
-                sshagent(['gcp-prod-server-ssh-key']) { // credential ID for SSH key
+                sshagent(['gcp-prod-server']) {
                     withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS')]) {
-                        sh """
+                        sh '''
                             ssh -o StrictHostKeyChecking=no ${PROD_SERVER} '
                                 # Docker login
                                 echo "${DOCKER_CREDS_PSW}" | docker login -u "${DOCKER_CREDS_USR}" --password-stdin
@@ -119,7 +115,7 @@ pipeline {
                                 docker run -d --name task-frontend -p 80:80 \\
                                     ${DOCKER_CREDS_USR}/task-frontend:latest
                             '
-                        """
+                        '''
                     }
                 }
             }
