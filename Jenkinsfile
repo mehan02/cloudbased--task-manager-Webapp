@@ -66,9 +66,7 @@ pipeline {
         }
         
         stage('Deploy to Production Server') {
-            when {
-                branch 'main'  // Only deploy from main branch
-            }
+            // Removed branch restriction - will deploy from any branch
             steps {
                 sshagent(['gcp-prod-server']) {
                     sh '''
