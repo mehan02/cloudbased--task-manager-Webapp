@@ -2,8 +2,7 @@ pipeline {
     agent any
 
     environment {
-        NODEJS_HOME = tool name: 'Node_20', type: 'NodeJS'
-        PATH = "${env.NODEJS_HOME}/bin:${env.PATH}"
+        PATH = "${tool name: 'Node_20', type: 'NodeJS'}/bin:${env.PATH}"
     }
 
     stages {
@@ -67,7 +66,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASSWORD')]) {
                     sh '''
-                        echo "Deploying containers..."
+                        docker rm -f frontend backend || true
                         docker run -d -p 80:80 --name frontend my-frontend
                         docker run -d -p 8081:8081 --name backend -e DB_PASSWORD=$DB_PASSWORD my-backend
                     '''
@@ -78,7 +77,9 @@ pipeline {
 
     post {
         always {
-            cleanWs()
+            node {
+                cleanWs()
+            }
         }
     }
 }
