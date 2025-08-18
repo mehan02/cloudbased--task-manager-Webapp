@@ -94,5 +94,5 @@ pipeline {
             sh 'docker logout || true'
             cleanWs()
         }
-    }
+   }
 }
