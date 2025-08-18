@@ -1,7 +1,12 @@
 pipeline {
     agent any
+    tools {
+        nodejs "Node_20"
+        jdk "Java17"
+    }
     environment {
-        PATH = "/usr/local/bin:/usr/bin:/bin"
+        DOCKER_BUILDKIT = 1
+        DB_PASS = credentials('cloudsql-db-pass') // secret text
     }
     stages {
         stage('Checkout SCM') {
@@ -9,17 +14,19 @@ pipeline {
                 checkout scm
             }
         }
+
         stage('Verify Tools') {
             steps {
                 sh '''
                 echo === Versions ===
-                docker --version
                 node -v
                 npm -v
+                docker --version
                 ./backend/gradlew --version
                 '''
             }
         }
+
         stage('Install Frontend Dependencies') {
             steps {
                 dir('frontend') {
@@ -27,6 +34,7 @@ pipeline {
                 }
             }
         }
+
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
@@ -34,6 +42,7 @@ pipeline {
                 }
             }
         }
+
         stage('Build Backend') {
             steps {
                 dir('backend') {
@@ -41,6 +50,7 @@ pipeline {
                 }
             }
         }
+
         stage('Docker Build') {
             steps {
                 dir('frontend') {
@@ -52,18 +62,10 @@ pipeline {
                 sh 'docker image prune -f --filter until=24h'
             }
         }
+
         stage('Deploy') {
             steps {
-                script {
-                    def DB_USER = "taskmanager_user"
-                    withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS')]) {
-                        sh """
-                        export DB_USER=${DB_USER}
-                        export DB_PASS=${DB_PASS}
-                        docker-compose -f ./docker-compose.yml up -d
-                        """
-                    }
-                }
+                echo "Deploying with DB_PASS=${env.DB_PASS}"
             }
         }
     }
