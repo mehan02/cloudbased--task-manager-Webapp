@@ -13,7 +13,19 @@ pipeline {
 
         stage('Verify Tools') {
             steps {
-                sh 'docker --version; node -v; ./gradlew --version'
+                // Use NodeJS plugin for verification
+                nodejs(nodeJSInstallationName: 'Node_20') {
+                    sh '''
+                        echo "Docker version:"
+                        docker --version
+                        echo "Node version:"
+                        node -v
+                        echo "NPM version:"
+                        npm -v
+                        echo "Gradle version:"
+                        ./gradlew --version
+                    '''
+                }
             }
         }
 
@@ -32,6 +44,7 @@ pipeline {
                 stage('Frontend Build') {
                     steps {
                         dir('frontend') {
+                            // Wrap with NodeJS plugin
                             nodejs(nodeJSInstallationName: 'Node_20') {
                                 sh 'npm ci && npm run build'
                             }
@@ -64,8 +77,10 @@ pipeline {
         stage('Deploy to Production') {
             steps {
                 sshagent(['gcp-prod-server']) {
-                    withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS'),
-                                     usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    withCredentials([
+                        string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS'),
+                        usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')
+                    ]) {
                         sh """
                             ssh -o StrictHostKeyChecking=no $SSH_USER@${PROD_SERVER} '
                                 echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
@@ -94,6 +109,6 @@ pipeline {
             sh 'docker logout || true'
             cleanWs()
         }
- 
-  }
+    }
 }
+
