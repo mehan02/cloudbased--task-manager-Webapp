@@ -6,11 +6,11 @@ pipeline {
     }
 
     environment {
-     
+        
         DB_CREDS = credentials('db-username-password-creds')  
-        DB_HOST = '34.14.211.97'                    
-        DB_NAME = 'taskmanager'          
-        DEPLOY_SERVER = '34.14.197.81'                
+        DB_HOST = '34.14.211.97'
+        DB_NAME = 'taskmanager'
+        DEPLOY_SERVER = '34.14.197.81'
     }
 
     stages {
@@ -26,10 +26,17 @@ pipeline {
             }
         }
 
-        stage('Build Frontend') {
+        stage('Install Frontend Dependencies') {
             steps {
                 dir('frontend') {
                     sh 'npm ci --no-audit'
+                }
+            }
+        }
+
+        stage('Build Frontend') {
+            steps {
+                dir('frontend') {
                     sh 'npm run build'
                 }
             }
@@ -57,7 +64,6 @@ pipeline {
             steps {
                 sshagent(credentials: ['gcp-prod-server']) {
                     script {
-                        // Using the credential variables directly
                         sshCommand(
                             remote: DEPLOY_SERVER,
                             command: """
@@ -80,16 +86,36 @@ pipeline {
 
     post {
         always {
-            cleanWs()
-            script {
-                dockerLogout()
+            node {
+                cleanWs()
+                script {
+                    try {
+                        dockerLogout()
+                    } catch(Exception e) {
+                        echo "Docker logout failed: ${e.message}"
+                    }
+                }
             }
         }
         failure {
-      
-            mail to: 'samarajeewams02@gmail.com',
-                 subject: "Pipeline Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                 body: "Check the failed build at ${env.BUILD_URL}"
+            script {
+                // Try email if configured, otherwise log to console
+                try {
+                    mail to: 'samarajeewams02@gmail.com',
+                         subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                         body: """
+                         Build failed with status: ${currentBuild.currentResult}
+                         
+                         View logs at: ${env.BUILD_URL}
+                         """
+                } catch(Exception e) {
+                    echo "Failed to send email notification: ${e.message}"
+                    echo "Build failed! View logs at: ${env.BUILD_URL}"
+                }
+            }
+        }
+        success {
+            echo "Build succeeded! ${env.BUILD_URL}"
         }
     }
 }
