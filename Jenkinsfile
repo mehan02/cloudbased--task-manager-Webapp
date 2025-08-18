@@ -11,7 +11,7 @@ pipeline {
         DOCKER_BUILDKIT = "1"
         BACKEND_DB_USER = "taskuser"
         BACKEND_DB_NAME = "taskmanager"
-        BACKEND_DB_HOST = "34.14.197.81"
+        BACKEND_DB_HOST = "34.14.197.81" // Public IP of GCP Cloud SQL or proxy host
         REMOTE_USER = "samarajeewamehan"
         REMOTE_HOST = "34.14.197.81"
         SSH_KEY = "/var/lib/jenkins/.ssh/gcp-task-manager.pem"
@@ -90,8 +90,11 @@ pipeline {
         stage('Deploy') {
             steps {
                 withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'BACKEND_DB_PASS')]) {
-                    sh """
-                        # Stop & remove old containers/images and ensure directories
+                    sh '''
+                        # Export secret safely
+                        export BACKEND_DB_PASS="${BACKEND_DB_PASS}"
+
+                        # Stop old containers and ensure directories
                         ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
                             docker stop my-backend || true
                             docker rm my-backend || true
@@ -103,11 +106,13 @@ pipeline {
                             mkdir -p /home/${REMOTE_USER}/backend
                         '
 
-                        # Copy frontend & backend builds (quote $WORKSPACE to handle spaces)
-                        scp -i "${SSH_KEY}" -o StrictHostKeyChecking=no -r "\$WORKSPACE/frontend/build/"* ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/frontend/
-                        scp -i "${SSH_KEY}" -o StrictHostKeyChecking=no "\$WORKSPACE/backend/build/libs/backend.jar" ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/backend/
+                        # Copy frontend build
+                        scp -i "${SSH_KEY}" -o StrictHostKeyChecking=no -r "$WORKSPACE/frontend/build/"* ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/frontend/
 
-                        # Deploy Docker containers
+                        # Copy backend jar
+                        scp -i "${SSH_KEY}" -o StrictHostKeyChecking=no "$WORKSPACE/backend/build/libs/backend.jar" ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/backend/
+
+                        # Run Docker containers
                         ssh -i "${SSH_KEY}" -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
                             docker run -d --name my-frontend -p 80:80 my-frontend
                             docker run -d --name my-backend \
@@ -115,10 +120,10 @@ pipeline {
                                 -e DB_HOST=${BACKEND_DB_HOST} \
                                 -e DB_USER=${BACKEND_DB_USER} \
                                 -e DB_NAME=${BACKEND_DB_NAME} \
-                                -e DB_PASS=$BACKEND_DB_PASS \
+                                -e DB_PASS=${BACKEND_DB_PASS} \
                                 my-backend
                         '
-                    """
+                    '''
                 }
             }
         }
@@ -129,7 +134,9 @@ pipeline {
             cleanWs()
         }
         failure {
-            echo "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+            // Only include this if you have Slack plugin configured
+            // slackSend channel: '#builds',
+            //          message: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
         }
     }
 }
