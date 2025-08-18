@@ -3,13 +3,11 @@ pipeline {
 
     environment {
         NODEJS_HOME = tool name: 'Node_20', type: 'NodeJS'
-        PATH = "${env.NODEJS_HOME}/bin:${env.PATH}"
         JAVA_HOME = tool name: 'Java17', type: 'jdk'
-        PATH = "${JAVA_HOME}/bin:${env.PATH}"
+        PATH = "${env.NODEJS_HOME}/bin:${JAVA_HOME}/bin:${env.PATH}"
     }
 
     stages {
-
         stage('Checkout SCM') {
             steps {
                 checkout scm
@@ -74,7 +72,6 @@ pipeline {
                 // Example: sh 'docker run -d -p 80:80 my-frontend'
             }
         }
-
     }
 
     post {
@@ -85,4 +82,3 @@ pipeline {
         }
     }
 }
-
