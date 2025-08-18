@@ -2,11 +2,11 @@ pipeline {
     agent any
 
     environment {
-        PROD_SERVER = "34.14.197.81"       // Production server (task-manager-server1)
+        PROD_SERVER = "34.14.197.81"
         DB_HOST     = "34.14.211.97"
         DB_PORT     = "5432"
-        DB_NAME     = "taskmanager"
-        DB_USER     = "db_user"
+        DB_NAME     = "taskmanager-db"
+        DB_USER     = "taskuser"
     }
 
     stages {
@@ -28,6 +28,7 @@ pipeline {
                         }
                     }
                 }
+
                 stage('Frontend Build') {
                     steps {
                         dir('frontend') {
@@ -40,7 +41,7 @@ pipeline {
             }
         }
 
-        stage('Docker Operations') {
+        stage('Docker Build & Push') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'docker-hub-pass',
@@ -62,22 +63,26 @@ pipeline {
 
         stage('Deploy to Production') {
             steps {
-                sshagent(['gcp-prod-server']) { // use SSH private key stored in Jenkins
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no samarajeewamehan@${PROD_SERVER} "
-                            docker login -u $DOCKER_USER -p $DOCKER_PASS
-                            docker pull $DOCKER_USER/task-backend:latest
-                            docker pull $DOCKER_USER/task-frontend:latest
-                            docker stop task-backend || true && docker rm task-backend || true
-                            docker stop task-frontend || true && docker rm task-frontend || true
-                            docker run -d --name task-backend -p 8081:8081 \\
-                                -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \\
-                                -e SPRING_DATASOURCE_USERNAME=${DB_USER} \\
-                                -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \\
-                                $DOCKER_USER/task-backend:latest
-                            docker run -d --name task-frontend -p 80:80 $DOCKER_USER/task-frontend:latest
-                        "
-                    '''
+                sshagent(['gcp-prod-server']) {
+                    withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS'),
+                                     usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            ssh -o StrictHostKeyChecking=no $SSH_USER@${PROD_SERVER} '
+                                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                                docker pull $DOCKER_USER/task-backend:latest
+                                docker pull $DOCKER_USER/task-frontend:latest
+                                docker stop task-backend || true && docker rm task-backend || true
+                                docker stop task-frontend || true && docker rm task-frontend || true
+                                docker run -d --name task-backend -p 8081:8081 \\
+                                    -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \\
+                                    -e SPRING_DATASOURCE_USERNAME=${DB_USER} \\
+                                    -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \\
+                                    $DOCKER_USER/task-backend:latest
+                                docker run -d --name task-frontend -p 80:80 $DOCKER_USER/task-frontend:latest
+                                docker system prune -f
+                            '
+                        """
+                    }
                 }
             }
         }
@@ -91,4 +96,3 @@ pipeline {
         }
     }
 }
-
