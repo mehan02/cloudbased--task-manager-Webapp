@@ -26,14 +26,14 @@ pipeline {
 
         stage('Verify Tools') {
             steps {
-                sh """
+                sh '''
                     echo "=== Tool Versions ==="
-                    echo "Node: \$(node -v)"
-                    echo "NPM: \$(npm -v)"
-                    echo "Java: \$(java -version 2>&1 | head -n 1)"
-                    echo "Gradle: \$(./backend/gradlew --version | grep 'Gradle')"
+                    echo "Node: $(node -v)"
+                    echo "NPM: $(npm -v)"
+                    echo "Java: $(java -version 2>&1 | head -n 1)"
+                    echo "Gradle: $(./backend/gradlew --version | grep 'Gradle')"
                     docker --version
-                """
+                '''
             }
         }
 
@@ -91,35 +91,34 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'BACKEND_DB_PASS')]) {
                     sh """
-                        ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
-                            # Stop & remove old containers and images
-                            docker stop my-backend || true
-                            docker rm my-backend || true
-                            docker rmi my-backend || true
-                            docker stop my-frontend || true
-                            docker rm my-frontend || true
-                            docker rmi my-frontend || true
-                            
-                            # Ensure directories exist
-                            mkdir -p /home/${REMOTE_USER}/frontend
-                            mkdir -p /home/${REMOTE_USER}/backend
-                        '
+                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
+                        # Stop & remove old containers/images
+                        docker stop my-backend || true
+                        docker rm my-backend || true
+                        docker rmi my-backend || true
+                        docker stop my-frontend || true
+                        docker rm my-frontend || true
+                        docker rmi my-frontend || true
                         
-                        # Copy frontend & backend builds
-                        scp -i ${SSH_KEY} -o StrictHostKeyChecking=no -r frontend/build/* ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/frontend/
-                        scp -i ${SSH_KEY} -o StrictHostKeyChecking=no backend/build/libs/backend.jar ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/backend/
-                        
-                        # Deploy Docker containers
-                        ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
-                            docker run -d --name my-frontend -p 80:80 my-frontend
-                            docker run -d --name my-backend \
-                                -p 8080:8080 \
-                                -e DB_HOST=${BACKEND_DB_HOST} \
-                                -e DB_USER=${BACKEND_DB_USER} \
-                                -e DB_NAME=${BACKEND_DB_NAME} \
-                                -e DB_PASS=$BACKEND_DB_PASS \
-                                my-backend
-                        '
+                        # Ensure directories exist
+                        mkdir -p /home/${REMOTE_USER}/frontend
+                        mkdir -p /home/${REMOTE_USER}/backend
+                    '
+                    
+                    # Copy frontend & backend builds
+                    scp -i ${SSH_KEY} -o StrictHostKeyChecking=no -r $WORKSPACE/frontend/build/* ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/frontend/
+                    scp -i ${SSH_KEY} -o StrictHostKeyChecking=no $WORKSPACE/backend/build/libs/backend.jar ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/backend/
+                    
+                    # Deploy Docker containers
+                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
+                        docker run -d --name my-frontend -p 80:80 my-frontend
+                        docker run -d --name my-backend -p 8080:8080 \
+                            -e DB_HOST=${BACKEND_DB_HOST} \
+                            -e DB_USER=${BACKEND_DB_USER} \
+                            -e DB_NAME=${BACKEND_DB_NAME} \
+                            -e DB_PASS=$BACKEND_DB_PASS \
+                            my-backend
+                    '
                     """
                 }
             }
@@ -131,8 +130,9 @@ pipeline {
             cleanWs()
         }
         failure {
-            slackSend channel: '#builds',
-                     message: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+            echo "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+            // If Slack plugin is installed, uncomment below
+            // slackSend channel: '#builds', message: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
         }
     }
 }
