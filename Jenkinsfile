@@ -4,7 +4,7 @@ pipeline {
     environment {
         REMOTE_USER = "samarajeewamehan"
         REMOTE_HOST = "34.14.197.81"
-        BACKEND_DB_PASS = credentials('db-pass')
+        BACKEND_DB_PASS = credentials('cloudsql-db-pass')
         DB_NAME = "taskdb"
         DB_USER = "taskuser"
     }
