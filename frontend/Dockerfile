@@ -1,4 +1,4 @@
-# Step 1: Build stage
+# Build stage
 FROM node:20 as build
 WORKDIR /app
 COPY package*.json ./
@@ -6,15 +6,10 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-# Step 2: Production stage
+# Production stage
 FROM nginx:alpine
-
-# Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Copy React build output
 COPY --from=build /app/build /usr/share/nginx/html
-
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 

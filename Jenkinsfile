@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        PROD_SERVER = "34.93.252.145"       // GCP VM Public IP
+        PROD_SERVER = "34.14.197.81"       // Production server
         DB_HOST     = "34.14.211.97"
         DB_PORT     = "5432"
         DB_NAME     = "taskmanager"
@@ -13,12 +13,7 @@ pipeline {
 
         stage('Verify Tools') {
             steps {
-                sh '''
-                    echo "Checking Docker access..."
-                    docker ps
-                    docker --version
-                    echo "Docker accessible!"
-                '''
+                sh 'docker --version; node -v; ./gradlew --version'
             }
         }
 
@@ -36,20 +31,8 @@ pipeline {
                 stage('Frontend Build') {
                     steps {
                         dir('frontend') {
-                            script {
-                                try {
-                                    nodejs(nodeJSInstallationName: 'Node_20') {
-                                        sh 'npm ci && npm run build'
-                                    }
-                                } catch (err) {
-                                    echo "Node_20 not configured, installing Node.js directly..."
-                                    sh '''
-                                        curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-                                        sudo apt-get install -y nodejs
-                                        npm ci
-                                        npm run build
-                                    '''
-                                }
+                            nodejs(nodeJSInstallationName: 'Node_20') {
+                                sh 'npm ci && npm run build'
                             }
                         }
                     }
@@ -66,13 +49,9 @@ pipeline {
                 )]) {
                     sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        
-                        # Backend
                         cd backend
                         docker build --pull --no-cache -t "$DOCKER_USER/task-backend:latest" .
                         docker push "$DOCKER_USER/task-backend:latest"
-                        
-                        # Frontend
                         cd ../frontend
                         docker build --pull --no-cache -t "$DOCKER_USER/task-frontend:latest" .
                         docker push "$DOCKER_USER/task-frontend:latest"
@@ -90,27 +69,16 @@ pipeline {
                 ]) {
                     sh '''
                         sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no $SSH_USER@${PROD_SERVER} "
-                            # Docker login on prod server
                             echo \\"$DOCKER_PASS\\" | docker login -u \\"$DOCKER_USER\\" --password-stdin
-
-                            # Pull latest images
                             docker pull $DOCKER_USER/task-backend:latest
                             docker pull $DOCKER_USER/task-frontend:latest
-
-                            # Stop & remove old containers
-                            docker stop task-backend || true
-                            docker rm task-backend || true
-                            docker stop task-frontend || true
-                            docker rm task-frontend || true
-
-                            # Run backend container
-                            docker run -d --name task-backend -p 8081:8080 \\
+                            docker stop task-backend || true && docker rm task-backend || true
+                            docker stop task-frontend || true && docker rm task-frontend || true
+                            docker run -d --name task-backend -p 8081:8081 \\
                                 -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \\
                                 -e SPRING_DATASOURCE_USERNAME=${DB_USER} \\
                                 -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \\
                                 $DOCKER_USER/task-backend:latest
-
-                            # Run frontend container
                             docker run -d --name task-frontend -p 80:80 $DOCKER_USER/task-frontend:latest
                         "
                     '''
