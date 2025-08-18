@@ -1,34 +1,26 @@
 pipeline {
     agent any
 
-    tools {
-        nodejs "Node_20"
-    }
-
     environment {
-        DB_CREDS = credentials('cloudsql-db-pass')  
-        DB_HOST = '34.14.211.97'
-        DB_NAME = 'taskmanager'
-        DEPLOY_SERVER = '34.14.197.81'
+        // DB Configuration
+        DB_HOST = '34.14.211.97'         
+        DB_NAME = 'taskmanager'          
+        DB_USER = 'taskuser'             
+        DB_PASSWORD = credentials('cloudsql-db-pass')  
     }
 
     stages {
-        stage('Verify Tools') {
+        stage('Checkout') {
             steps {
-                sh '''
-                    echo "=== Versions ==="
-                    docker --version
-                    node -v
-                    npm -v
-                    ./backend/gradlew --version
-                '''
+                git branch: 'main',
+                    url: 'git@github.com:MehanSamarajeewa/task-manager.git'
             }
         }
 
-        stage('Install Frontend Dependencies') {
+        stage('Build Backend') {
             steps {
-                dir('frontend') {
-                    sh 'npm ci --no-audit'
+                dir('backend') {
+                    sh './gradlew clean build -x test'
                 }
             }
         }
@@ -36,82 +28,66 @@ pipeline {
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
+                    sh 'npm install'
                     sh 'npm run build'
                 }
             }
         }
 
-        stage('Build Backend') {
-            steps {
-                dir('backend') {
-                    sh './gradlew clean build -x test --no-daemon'
-                }
-            }
-        }
-
-        stage('Docker Build') {
+        stage('Build Docker Images') {
             steps {
                 script {
-                    docker.build("my-frontend", "./frontend")
-                    docker.build("my-backend", "./backend")
-                    sh 'docker image prune -f --filter "until=24h"'
+                    sh 'docker build -t taskmanager-backend ./backend'
+                    sh 'docker build -t taskmanager-frontend ./frontend'
                 }
             }
         }
 
-        stage('Secure Deploy') {
+        stage('Push Docker Images') {
             steps {
-                sshagent(credentials: ['gcp-prod-server']) {
-                    script {
-                        sshCommand(
-                            remote: DEPLOY_SERVER,
-                            command: """
-                                docker stop my-frontend my-backend || true
-                                docker rm my-frontend my-backend || true
-                                docker run -d -p 80:80 --name my-frontend my-frontend
-                                docker run -d -p 8080:8080 --name my-backend \\
-                                    -e SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:3306/${DB_NAME} \\
-                                    -e SPRING_DATASOURCE_USERNAME=${DB_CREDS_USR} \\
-                                    -e SPRING_DATASOURCE_PASSWORD=${DB_CREDS_PSW} \\
-                                    my-backend
-                            """,
-                            sudo: false
-                        )
-                    }
+                script {
+                    sh 'docker tag taskmanager-backend gcr.io/YOUR_PROJECT_ID/taskmanager-backend:latest'
+                    sh 'docker tag taskmanager-frontend gcr.io/YOUR_PROJECT_ID/taskmanager-frontend:latest'
+                    
+                    sh 'docker push gcr.io/YOUR_PROJECT_ID/taskmanager-backend:latest'
+                    sh 'docker push gcr.io/YOUR_PROJECT_ID/taskmanager-frontend:latest'
                 }
             }
         }
-    }
 
-    post {
-        always {
-            script {
-                cleanWs()
-                try {
-                    dockerLogout()
-                } catch(Exception e) {
-                    echo "Docker logout failed: ${e.message}"
+        stage('Deploy') {
+            steps {
+                script {
+                    // Stop old containers
+                    sh '''
+                        ssh -o StrictHostKeyChecking=no mehan@34.14.197.81 "
+                            docker stop taskmanager-backend || true &&
+                            docker rm taskmanager-backend || true &&
+                            docker stop taskmanager-frontend || true &&
+                            docker rm taskmanager-frontend || true
+                        "
+                    '''
+
+                    // Run backend with DB connection
+                    sh """
+                        ssh -o StrictHostKeyChecking=no mehan@34.14.197.81 '
+                            docker run -d --name taskmanager-backend -p 8080:8080 \
+                            -e SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:3306/${DB_NAME} \
+                            -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
+                            -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD} \
+                            gcr.io/YOUR_PROJECT_ID/taskmanager-backend:latest
+                        '
+                    """
+
+                    // Run frontend
+                    sh """
+                        ssh -o StrictHostKeyChecking=no mehan@34.14.197.81 '
+                            docker run -d --name taskmanager-frontend -p 80:80 \
+                            gcr.io/YOUR_PROJECT_ID/taskmanager-frontend:latest
+                        '
+                    """
                 }
             }
-        }
-        failure {
-            script {
-                try {
-                    mail to: 'samarajeewams02@gmail.com',
-                         subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                         body: """
-                         Build failed with status: ${currentBuild.currentResult}
-                         
-                         View logs at: ${env.BUILD_URL}
-                         """
-                } catch(Exception e) {
-                    echo "Failed to send email notification: ${e.message}"
-                    echo "Build failed! View logs at: ${env.BUILD_URL}"
-                }
-            }
-        }
-        success {
-            echo "Build succeeded! ${env.BUILD_URL}"
         }
     }
 }
