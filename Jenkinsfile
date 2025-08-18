@@ -1,10 +1,13 @@
 pipeline {
     agent any
 
+    tools {
+        nodejs 'Node_20'   
+        jdk 'Java17'       
+    }
+
     environment {
-        NODEJS_HOME = tool name: 'Node_20', type: 'NodeJS'
-        JAVA_HOME = tool name: 'Java17', type: 'jdk'
-        PATH = "${env.NODEJS_HOME}/bin:${JAVA_HOME}/bin:${env.PATH}"
+        PATH = "${env.JAVA_HOME}/bin:${env.NODEJS_HOME}/bin:${env.PATH}"
     }
 
     stages {
@@ -18,6 +21,8 @@ pipeline {
             steps {
                 sh '''
                     echo "=== Versions ==="
+                    echo "Node path: ${env.NODEJS_HOME}"
+                    echo "Java path: ${env.JAVA_HOME}"
                     docker --version
                     node -v
                     npm -v
@@ -69,16 +74,13 @@ pipeline {
         stage('Deploy') {
             steps {
                 echo 'Deployment steps go here...'
-                // Example: sh 'docker run -d -p 80:80 my-frontend'
             }
         }
     }
 
     post {
         always {
-            script {
-                cleanWs()
-            }
+            cleanWs()
         }
     }
 }
