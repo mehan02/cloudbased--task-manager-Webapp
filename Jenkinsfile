@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        PROD_SERVER = "34.14.197.81"       // Production server
+        PROD_SERVER = "34.14.197.81"       // Production server (task-manager-server1)
         DB_HOST     = "34.14.211.97"
         DB_PORT     = "5432"
         DB_NAME     = "taskmanager"
@@ -62,14 +62,10 @@ pipeline {
 
         stage('Deploy to Production') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS'),
-                    usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS'),
-                    usernamePassword(credentialsId: 'gcp-prod-server', usernameVariable: 'SSH_USER', passwordVariable: 'SSH_PASS')
-                ]) {
+                sshagent(['gcp-prod-server']) { // use SSH private key stored in Jenkins
                     sh '''
-                        sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no $SSH_USER@${PROD_SERVER} "
-                            echo \\"$DOCKER_PASS\\" | docker login -u \\"$DOCKER_USER\\" --password-stdin
+                        ssh -o StrictHostKeyChecking=no samarajeewamehan@${PROD_SERVER} "
+                            docker login -u $DOCKER_USER -p $DOCKER_PASS
                             docker pull $DOCKER_USER/task-backend:latest
                             docker pull $DOCKER_USER/task-frontend:latest
                             docker stop task-backend || true && docker rm task-backend || true
