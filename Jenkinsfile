@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'Node_20'   
-        jdk 'Java17'       
+        nodejs 'Node_20'  // Ensure this matches Jenkins' NodeJS installation name exactly
+        jdk 'Java17'     // Ensure this matches Jenkins' JDK installation name exactly
     }
 
     environment {
@@ -19,15 +19,14 @@ pipeline {
 
         stage('Verify Tools') {
             steps {
-                sh '''
+                sh """
                     echo "=== Versions ==="
-                    echo "Node path: ${env.NODEJS_HOME}"
-                    echo "Java path: ${env.JAVA_HOME}"
+                    echo "Node: \$(node -v)"
+                    echo "NPM: \$(npm -v)"
+                    echo "Java: \$(java -version 2>&1 | head -n 1)"
+                    echo "Gradle: \$(./backend/gradlew --version | grep 'Gradle')"
                     docker --version
-                    node -v
-                    npm -v
-                    ./backend/gradlew --version
-                '''
+                """
             }
         }
 
