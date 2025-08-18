@@ -2,15 +2,22 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'Node_20'  
-        jdk 'Java17'      
+        nodejs 'Node_20'
+        jdk 'Java17'
     }
 
     environment {
-        // Combine paths safely
         PATH = "${env.JAVA_HOME}/bin:${env.NODEJS_HOME}/bin:${env.PATH}"
-        // Enable Docker BuildKit by default
         DOCKER_BUILDKIT = "1"
+
+        // Production server configuration
+        PROD_SERVER = '34.14.197.81'
+        PROD_USER = 'task-manager-server1'
+
+        // Backend database credentials
+        BACKEND_DB_USER = 'taskuser'
+        BACKEND_DB_NAME = 'taskmanager'
+        BACKEND_DB_PASS = credentials('cloudsql-db-pass') // Jenkins secret text
     }
 
     stages {
@@ -61,7 +68,6 @@ pipeline {
             steps {
                 dir('frontend') {
                     sh '''
-                        # Retry on Docker Hub failures
                         for i in {1..3}; do
                             docker build -t my-frontend . && break
                             sleep 10
@@ -75,7 +81,6 @@ pipeline {
             steps {
                 dir('backend') {
                     sh '''
-                        # Retry with BuildKit enabled
                         for i in {1..3}; do
                             docker build -t my-backend . && break
                             sleep 10
@@ -85,11 +90,34 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy to Production') {
             steps {
-                echo 'Deployment would happen here'
-                // Example:
-                // sh 'docker-compose up -d'
+                script {
+                    def remote = [:]
+                    remote.name = 'prod-server'
+                    remote.host = env.PROD_SERVER
+                    remote.user = env.PROD_USER
+                    remote.allowAnyHosts = true
+
+                    sshCommand remote: remote, command: """
+                        # Stop and remove previous containers if they exist
+                        docker stop my-frontend || true
+                        docker rm my-frontend || true
+                        docker stop my-backend || true
+                        docker rm my-backend || true
+
+                        # Run backend with DB environment variables
+                        docker run -d --name my-backend \\
+                            -e DB_USER=${BACKEND_DB_USER} \\
+                            -e DB_NAME=${BACKEND_DB_NAME} \\
+                            -e DB_PASS=${BACKEND_DB_PASS} \\
+                            -p 8080:8080 my-backend
+
+                        # Run frontend
+                        docker run -d --name my-frontend \\
+                            -p 80:80 my-frontend
+                    """
+                }
             }
         }
     }
@@ -100,7 +128,8 @@ pipeline {
         }
         failure {
             slackSend channel: '#builds',
-                     message: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                      message: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
         }
     }
 }
+
