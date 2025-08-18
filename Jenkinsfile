@@ -6,8 +6,8 @@ pipeline {
     }
 
     environment {
-        // Secure credential binding (masked in logs)
-        DB_CREDS = credentials('cloudsql-db-pass')   
+        // Use usernamePassword credential type
+        DB_CREDS = credentials('cloudsql-db-pass')  // Must be usernamePassword type in Jenkins
         DB_HOST = '34.14.211.97'                    
         DB_NAME = 'taskmanager'          
         DEPLOY_SERVER = '34.14.197.81'                
@@ -29,7 +29,7 @@ pipeline {
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
-                    sh 'npm ci --no-audit'  // More secure than install
+                    sh 'npm ci --no-audit'
                     sh 'npm run build'
                 }
             }
@@ -57,25 +57,27 @@ pipeline {
             steps {
                 sshagent(credentials: ['gcp-prod-server']) {
                     script {
-                        // Using Jenkins' built-in docker plugin for better security
-                        def backendEnvVars = [
-                            "SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:3306/${DB_NAME}",
-                            "SPRING_DATASOURCE_USERNAME=${DB_CREDS_USR}",
-                            "SPRING_DATASOURCE_PASSWORD=${DB_CREDS_PSW}"
-                        ].join(',')
-
-                        sshCommand(
-                            remote: DEPLOY_SERVER,
-                            command: """
-                                docker stop my-frontend my-backend || true
-                                docker rm my-frontend my-backend || true
-                                docker run -d -p 80:80 --name my-frontend my-frontend
-                                docker run -d -p 8080:8080 --name my-backend \\
-                                    -e ${backendEnvVars} \\
-                                    my-backend
-                            """,
-                            sudo: false
-                        )
+                        // Using withCredentials for additional security
+                        withCredentials([usernamePassword(
+                            credentialsId: 'cloudsql-db-pass',
+                            usernameVariable: 'DB_USER',
+                            passwordVariable: 'DB_PASSWORD'
+                        )]) {
+                            sshCommand(
+                                remote: DEPLOY_SERVER,
+                                command: """
+                                    docker stop my-frontend my-backend || true
+                                    docker rm my-frontend my-backend || true
+                                    docker run -d -p 80:80 --name my-frontend my-frontend
+                                    docker run -d -p 8080:8080 --name my-backend \\
+                                        -e SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:3306/${DB_NAME} \\
+                                        -e SPRING_DATASOURCE_USERNAME=${DB_USER} \\
+                                        -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD} \\
+                                        my-backend
+                                """,
+                                sudo: false
+                            )
+                        }
                     }
                 }
             }
