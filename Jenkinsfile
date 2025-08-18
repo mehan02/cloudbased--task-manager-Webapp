@@ -2,18 +2,20 @@ pipeline {
     agent any
 
     environment {
-        // DB Configuration
-        DB_HOST = '34.14.211.97'         
-        DB_NAME = 'taskmanager'          
-        DB_USER = 'taskuser'             
-        DB_PASSWORD = credentials('cloudsql-db-pass')  
+        DB_HOST = '34.93.252.145' 
+        DB_NAME = 'taskmanager'
+        DB_USER = 'taskuser'
+        DB_PASS = credentials('cloudsql-db-pass')   
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main',
-                    url: 'git@github.com:MehanSamarajeewa/task-manager.git'
+                git(
+                    url: 'https://github.com/mehan02/cloudbased--task-manager-.git',
+                    branch: 'main',
+                    credentialsId: 'github-pat'
+                )
             }
         }
 
@@ -34,58 +36,44 @@ pipeline {
             }
         }
 
-        stage('Build Docker Images') {
+        stage('Docker Build & Push') {
             steps {
                 script {
-                    sh 'docker build -t taskmanager-backend ./backend'
-                    sh 'docker build -t taskmanager-frontend ./frontend'
+                    docker.withRegistry('', 'docker-hub-cred') {
+                        dir('backend') {
+                            sh 'docker build -t mehan02/taskmanager-backend:latest .'
+                            sh 'docker push mehan02/taskmanager-backend:latest'
+                        }
+                        dir('frontend') {
+                            sh 'docker build -t mehan02/taskmanager-frontend:latest .'
+                            sh 'docker push mehan02/taskmanager-frontend:latest'
+                        }
+                    }
                 }
             }
         }
 
-        stage('Push Docker Images') {
+        stage('Deploy to VM') {
             steps {
-                script {
-                    sh 'docker tag taskmanager-backend gcr.io/YOUR_PROJECT_ID/taskmanager-backend:latest'
-                    sh 'docker tag taskmanager-frontend gcr.io/YOUR_PROJECT_ID/taskmanager-frontend:latest'
-                    
-                    sh 'docker push gcr.io/YOUR_PROJECT_ID/taskmanager-backend:latest'
-                    sh 'docker push gcr.io/YOUR_PROJECT_ID/taskmanager-frontend:latest'
-                }
-            }
-        }
-
-        stage('Deploy') {
-            steps {
-                script {
-                    // Stop old containers
+                sshagent(['gcp-ssh-key']) {
                     sh '''
-                        ssh -o StrictHostKeyChecking=no mehan@34.14.197.81 "
-                            docker stop taskmanager-backend || true &&
-                            docker rm taskmanager-backend || true &&
-                            docker stop taskmanager-frontend || true &&
-                            docker rm taskmanager-frontend || true
-                        "
+                        ssh -o StrictHostKeyChecking=no mehan@34.14.197.81 << EOF
+                            docker pull mehan02/taskmanager-backend:latest
+                            docker pull mehan02/taskmanager-frontend:latest
+
+                            docker stop backend || true && docker rm backend || true
+                            docker stop frontend || true && docker rm frontend || true
+
+                            docker run -d --name backend -p 8080:8080 \
+                                -e SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:3306/${DB_NAME} \
+                                -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
+                                -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \
+                                mehan02/taskmanager-backend:latest
+
+                            docker run -d --name frontend -p 80:80 \
+                                mehan02/taskmanager-frontend:latest
+                        EOF
                     '''
-
-                    // Run backend with DB connection
-                    sh """
-                        ssh -o StrictHostKeyChecking=no mehan@34.14.197.81 '
-                            docker run -d --name taskmanager-backend -p 8080:8080 \
-                            -e SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:3306/${DB_NAME} \
-                            -e SPRING_DATASOURCE_USERNAME=${DB_USER} \
-                            -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD} \
-                            gcr.io/YOUR_PROJECT_ID/taskmanager-backend:latest
-                        '
-                    """
-
-                    // Run frontend
-                    sh """
-                        ssh -o StrictHostKeyChecking=no mehan@34.14.197.81 '
-                            docker run -d --name taskmanager-frontend -p 80:80 \
-                            gcr.io/YOUR_PROJECT_ID/taskmanager-frontend:latest
-                        '
-                    """
                 }
             }
         }
