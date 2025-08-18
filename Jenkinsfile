@@ -14,6 +14,9 @@ pipeline {
         // Pull secret from Jenkins credentials
         BACKEND_DB_PASS = credentials('cloudsql-db-pass')
         BACKEND_DB_HOST = "34.14.197.81" // Public IP of GCP Cloud SQL or proxy host
+        SSH_KEY = "/var/lib/jenkins/.ssh/gcp-task-manager.pem" // Jenkins private key
+        REMOTE_USER = "samarajeewamehan"
+        REMOTE_HOST = "34.14.197.81"
     }
 
     stages {
@@ -88,35 +91,33 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                sshagent(['gcp-prod-server']) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no ubuntu@34.14.197.81 '
-                            docker stop my-backend || true
-                            docker rm my-backend || true
-                            docker rmi my-backend || true
-                            docker stop my-frontend || true
-                            docker rm my-frontend || true
-                            docker rmi my-frontend || true
-                        '
-                        scp frontend/Dockerfile backend/Dockerfile ubuntu@34.14.197.81:/home/ubuntu/
-                        scp -r frontend/build ubuntu@34.14.197.81:/home/ubuntu/frontend/
-                        scp backend/build/libs/backend.jar ubuntu@34.14.197.81:/home/ubuntu/backend/
+                sh """
+                    # Stop and remove existing containers on remote
+                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
+                        docker stop my-backend || true
+                        docker rm my-backend || true
+                        docker rmi my-backend || true
+                        docker stop my-frontend || true
+                        docker rm my-frontend || true
+                        docker rmi my-frontend || true
+                    '
 
-                        ssh ubuntu@34.14.197.81 '
-                            # Run Frontend container
-                            docker run -d --name my-frontend -p 80:80 my-frontend
-                            
-                            # Run Backend container with DB env variables
-                            docker run -d --name my-backend \
-                                -p 8080:8080 \
-                                -e DB_HOST=${BACKEND_DB_HOST} \
-                                -e DB_USER=${BACKEND_DB_USER} \
-                                -e DB_NAME=${BACKEND_DB_NAME} \
-                                -e DB_PASS=${BACKEND_DB_PASS} \
-                                my-backend
-                        '
-                    """
-                }
+                    # Copy frontend and backend artifacts
+                    scp -i ${SSH_KEY} -o StrictHostKeyChecking=no -r frontend/build ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/frontend/
+                    scp -i ${SSH_KEY} -o StrictHostKeyChecking=no backend/build/libs/backend.jar ${REMOTE_USER}@${REMOTE_HOST}:/home/${REMOTE_USER}/backend/
+
+                    # Run containers on remote
+                    ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} '
+                        docker run -d --name my-frontend -p 80:80 my-frontend
+                        docker run -d --name my-backend \
+                            -p 8080:8080 \
+                            -e DB_HOST=${BACKEND_DB_HOST} \
+                            -e DB_USER=${BACKEND_DB_USER} \
+                            -e DB_NAME=${BACKEND_DB_NAME} \
+                            -e DB_PASS=${BACKEND_DB_PASS} \
+                            my-backend
+                    '
+                """
             }
         }
     }
