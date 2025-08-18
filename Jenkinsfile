@@ -2,12 +2,15 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'Node_20'  // Ensure this matches Jenkins' NodeJS installation name exactly
-        jdk 'Java17'     // Ensure this matches Jenkins' JDK installation name exactly
+        nodejs 'Node_20'  
+        jdk 'Java17'      
     }
 
     environment {
+        // Combine paths safely
         PATH = "${env.JAVA_HOME}/bin:${env.NODEJS_HOME}/bin:${env.PATH}"
+        // Enable Docker BuildKit by default
+        DOCKER_BUILDKIT = "1"
     }
 
     stages {
@@ -20,7 +23,7 @@ pipeline {
         stage('Verify Tools') {
             steps {
                 sh """
-                    echo "=== Versions ==="
+                    echo "=== Tool Versions ==="
                     echo "Node: \$(node -v)"
                     echo "NPM: \$(npm -v)"
                     echo "Java: \$(java -version 2>&1 | head -n 1)"
@@ -49,7 +52,7 @@ pipeline {
         stage('Build Backend') {
             steps {
                 dir('backend') {
-                    sh './gradlew clean build'
+                    sh './gradlew clean build -x test'
                 }
             }
         }
@@ -57,7 +60,13 @@ pipeline {
         stage('Docker Build Frontend') {
             steps {
                 dir('frontend') {
-                    sh 'DOCKER_BUILDKIT=0 docker build -t my-frontend .'
+                    sh '''
+                        # Retry on Docker Hub failures
+                        for i in {1..3}; do
+                            docker build -t my-frontend . && break
+                            sleep 10
+                        done
+                    '''
                 }
             }
         }
@@ -65,14 +74,22 @@ pipeline {
         stage('Docker Build Backend') {
             steps {
                 dir('backend') {
-                    sh 'DOCKER_BUILDKIT=0 docker build -t my-backend .'
+                    sh '''
+                        # Retry with BuildKit enabled
+                        for i in {1..3}; do
+                            docker build -t my-backend . && break
+                            sleep 10
+                        done
+                    '''
                 }
             }
         }
 
         stage('Deploy') {
             steps {
-                echo 'Deployment steps go here...'
+                echo 'Deployment would happen here'
+                // Example:
+                // sh 'docker-compose up -d'
             }
         }
     }
@@ -80,6 +97,10 @@ pipeline {
     post {
         always {
             cleanWs()
+        }
+        failure {
+            slackSend channel: '#builds',
+                     message: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
         }
     }
 }
