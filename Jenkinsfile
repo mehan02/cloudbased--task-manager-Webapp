@@ -2,49 +2,34 @@ pipeline {
     agent any
 
     tools {
-        // Jenkins NodeJS plugin
         nodejs "Node_20"
     }
 
     environment {
-        CLOUDSQL_CRED = "cloudsql-db-pass"    
-        DB_HOST      = "34.14.211.97"        
-        DB_NAME      = "taskmanager"          
-        DB_USER      = "taskuser"            
+        // Secure credential binding (masked in logs)
+        DB_CREDS = credentials('cloudsql-db-pass')   
+        DB_HOST = '34.14.211.97'                    
+        DB_NAME = 'taskmanager'          
+        DEPLOY_SERVER = '34.14.197.81'                
     }
 
     stages {
-
         stage('Verify Tools') {
             steps {
                 sh '''
-                    echo "=== Docker Version ==="
+                    echo "=== Versions ==="
                     docker --version
-
-                    echo "=== NodeJS Version ==="
                     node -v
-
-                    echo "=== NPM Version ==="
                     npm -v
-
-                    echo "=== Gradle Wrapper Version ==="
-                    cd backend
-                    ./gradlew --version
+                    ./backend/gradlew --version
                 '''
-            }
-        }
-
-        stage('Install Frontend Dependencies') {
-            steps {
-                dir('frontend') {
-                    sh 'npm install'
-                }
             }
         }
 
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
+                    sh 'npm ci --no-audit'  // More secure than install
                     sh 'npm run build'
                 }
             }
@@ -53,45 +38,44 @@ pipeline {
         stage('Build Backend') {
             steps {
                 dir('backend') {
-                    sh './gradlew clean build -x test'
+                    sh './gradlew clean build -x test --no-daemon'
                 }
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh '''
-                    echo "Building Docker images..."
-                    docker build -t my-frontend ./frontend
-                    docker build -t my-backend ./backend
-
-                    echo "Cleaning up dangling images..."
-                    docker image prune -f
-                '''
+                script {
+                    docker.build("my-frontend", "./frontend")
+                    docker.build("my-backend", "./backend")
+                    sh 'docker image prune -f --filter "until=24h"'
+                }
             }
         }
 
-        stage('Deploy to Server') {
+        stage('Secure Deploy') {
             steps {
-                sshagent(['gcp-prod-server']) {
-                    withCredentials([string(credentialsId: "${CLOUDSQL_CRED}", variable: 'DB_PASSWORD')]) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no ubuntu@<YOUR_SERVER_IP> '
-                                # Stop and remove old containers
-                                docker stop my-frontend || true && docker rm my-frontend || true
-                                docker stop my-backend || true && docker rm my-backend || true
+                sshagent(credentials: ['gcp-prod-server']) {
+                    script {
+                        // Using Jenkins' built-in docker plugin for better security
+                        def backendEnvVars = [
+                            "SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:3306/${DB_NAME}",
+                            "SPRING_DATASOURCE_USERNAME=${DB_CREDS_USR}",
+                            "SPRING_DATASOURCE_PASSWORD=${DB_CREDS_PSW}"
+                        ].join(',')
 
-                                # Run frontend
+                        sshCommand(
+                            remote: DEPLOY_SERVER,
+                            command: """
+                                docker stop my-frontend my-backend || true
+                                docker rm my-frontend my-backend || true
                                 docker run -d -p 80:80 --name my-frontend my-frontend
-
-                                # Run backend with DB environment variables
                                 docker run -d -p 8080:8080 --name my-backend \\
-                                    -e SPRING_DATASOURCE_URL=jdbc:mysql://${DB_HOST}:3306/${DB_NAME} \\
-                                    -e SPRING_DATASOURCE_USERNAME=${DB_USER} \\
-                                    -e SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD} \\
+                                    -e ${backendEnvVars} \\
                                     my-backend
-                            '
-                        """
+                            """,
+                            sudo: false
+                        )
                     }
                 }
             }
@@ -100,8 +84,14 @@ pipeline {
 
     post {
         always {
-            sh 'docker logout || true'
             cleanWs()
+            script {
+                dockerLogout()
+            }
+        }
+        failure {
+            slackSend channel: '#deployments',
+                     message: "Deployment failed: ${env.JOB_NAME} ${env.BUILD_NUMBER}"
         }
     }
 }
