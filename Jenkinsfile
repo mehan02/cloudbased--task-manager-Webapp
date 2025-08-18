@@ -6,7 +6,6 @@ pipeline {
     }
 
     environment {
-        
         DB_CREDS = credentials('db-username-password-creds')  
         DB_HOST = '34.14.211.97'
         DB_NAME = 'taskmanager'
@@ -86,20 +85,17 @@ pipeline {
 
     post {
         always {
-            node {
+            script {
                 cleanWs()
-                script {
-                    try {
-                        dockerLogout()
-                    } catch(Exception e) {
-                        echo "Docker logout failed: ${e.message}"
-                    }
+                try {
+                    dockerLogout()
+                } catch(Exception e) {
+                    echo "Docker logout failed: ${e.message}"
                 }
             }
         }
         failure {
             script {
-                // Try email if configured, otherwise log to console
                 try {
                     mail to: 'samarajeewams02@gmail.com',
                          subject: "FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
