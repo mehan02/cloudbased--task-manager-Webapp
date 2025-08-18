@@ -6,7 +6,7 @@ pipeline {
     }
 
     environment {
-        DB_CREDS = credentials('db-username-password-creds')  
+        DB_CREDS = credentials('cloudsql-db-pass')  
         DB_HOST = '34.14.211.97'
         DB_NAME = 'taskmanager'
         DEPLOY_SERVER = '34.14.197.81'
