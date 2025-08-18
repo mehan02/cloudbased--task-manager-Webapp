@@ -9,15 +9,11 @@ pipeline {
     environment {
         PATH = "${env.JAVA_HOME}/bin:${env.NODEJS_HOME}/bin:${env.PATH}"
         DOCKER_BUILDKIT = "1"
-
-        // Production server configuration
-        PROD_SERVER = '34.14.197.81'
-        PROD_USER = 'task-manager-server1'
-
-        // Backend database credentials
-        BACKEND_DB_USER = 'taskuser'
-        BACKEND_DB_NAME = 'taskmanager'
-        BACKEND_DB_PASS = credentials('cloudsql-db-pass') // Jenkins secret text
+        BACKEND_DB_USER = "taskuser"
+        BACKEND_DB_NAME = "taskmanager"
+        // Pull secret from Jenkins credentials
+        BACKEND_DB_PASS = credentials('cloudsql-db-pass')
+        BACKEND_DB_HOST = "34.14.197.81" // Public IP of GCP Cloud SQL or proxy host
     }
 
     stages {
@@ -90,32 +86,35 @@ pipeline {
             }
         }
 
-        stage('Deploy to Production') {
+        stage('Deploy') {
             steps {
-                script {
-                    def remote = [:]
-                    remote.name = 'prod-server'
-                    remote.host = env.PROD_SERVER
-                    remote.user = env.PROD_USER
-                    remote.allowAnyHosts = true
+                sshagent(['gcp-prod-server']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ubuntu@34.14.197.81 '
+                            docker stop my-backend || true
+                            docker rm my-backend || true
+                            docker rmi my-backend || true
+                            docker stop my-frontend || true
+                            docker rm my-frontend || true
+                            docker rmi my-frontend || true
+                        '
+                        scp frontend/Dockerfile backend/Dockerfile ubuntu@34.14.197.81:/home/ubuntu/
+                        scp -r frontend/build ubuntu@34.14.197.81:/home/ubuntu/frontend/
+                        scp backend/build/libs/backend.jar ubuntu@34.14.197.81:/home/ubuntu/backend/
 
-                    sshCommand remote: remote, command: """
-                        # Stop and remove previous containers if they exist
-                        docker stop my-frontend || true
-                        docker rm my-frontend || true
-                        docker stop my-backend || true
-                        docker rm my-backend || true
-
-                        # Run backend with DB environment variables
-                        docker run -d --name my-backend \\
-                            -e DB_USER=${BACKEND_DB_USER} \\
-                            -e DB_NAME=${BACKEND_DB_NAME} \\
-                            -e DB_PASS=${BACKEND_DB_PASS} \\
-                            -p 8080:8080 my-backend
-
-                        # Run frontend
-                        docker run -d --name my-frontend \\
-                            -p 80:80 my-frontend
+                        ssh ubuntu@34.14.197.81 '
+                            # Run Frontend container
+                            docker run -d --name my-frontend -p 80:80 my-frontend
+                            
+                            # Run Backend container with DB env variables
+                            docker run -d --name my-backend \
+                                -p 8080:8080 \
+                                -e DB_HOST=${BACKEND_DB_HOST} \
+                                -e DB_USER=${BACKEND_DB_USER} \
+                                -e DB_NAME=${BACKEND_DB_NAME} \
+                                -e DB_PASS=${BACKEND_DB_PASS} \
+                                my-backend
+                        '
                     """
                 }
             }
@@ -128,7 +127,7 @@ pipeline {
         }
         failure {
             slackSend channel: '#builds',
-                      message: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                     message: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
         }
     }
 }
