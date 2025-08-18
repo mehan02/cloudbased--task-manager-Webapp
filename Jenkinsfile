@@ -1,28 +1,29 @@
 pipeline {
     agent any
-    tools {
-        nodejs "Node_20"
-        jdk "Java17"
-    }
+
     environment {
-        DOCKER_BUILDKIT = 1
-        DB_PASS = credentials('cloudsql-db-pass') // secret text
+        NODEJS_HOME = tool name: 'Node_20', type: 'NodeJS'
+        PATH = "${env.NODEJS_HOME}/bin:${env.PATH}"
     }
+
     stages {
         stage('Checkout SCM') {
             steps {
-                checkout scm
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[url: 'https://github.com/mehan02/cloudbased--task-manager-.git', credentialsId: 'github-pat']]
+                ])
             }
         }
 
         stage('Verify Tools') {
             steps {
                 sh '''
-                echo === Versions ===
-                node -v
-                npm -v
-                docker --version
-                ./backend/gradlew --version
+                    echo === Versions ===
+                    docker --version
+                    node -v
+                    npm -v
+                    ./backend/gradlew --version
                 '''
             }
         }
@@ -54,21 +55,27 @@ pipeline {
         stage('Docker Build') {
             steps {
                 dir('frontend') {
-                    sh 'docker build -t my-frontend .'
+                    sh 'DOCKER_BUILDKIT=0 docker build -t my-frontend .'
                 }
                 dir('backend') {
-                    sh 'docker build -t my-backend .'
+                    sh 'DOCKER_BUILDKIT=0 docker build -t my-backend .'
                 }
-                sh 'docker image prune -f --filter until=24h'
             }
         }
 
         stage('Deploy') {
             steps {
-                echo "Deploying with DB_PASS=${env.DB_PASS}"
+                withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASSWORD')]) {
+                    sh '''
+                        echo "Deploying containers..."
+                        docker run -d -p 80:80 --name frontend my-frontend
+                        docker run -d -p 8081:8081 --name backend -e DB_PASSWORD=$DB_PASSWORD my-backend
+                    '''
+                }
             }
         }
     }
+
     post {
         always {
             cleanWs()
