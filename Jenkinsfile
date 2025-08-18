@@ -1,113 +1,84 @@
 pipeline {
     agent any
 
-    environment {
-        PROD_SERVER = "34.14.197.81"
-        DB_HOST     = "34.14.211.97"
-        DB_PORT     = "5432"
-        DB_NAME     = "taskmanager-db"
-        DB_USER     = "taskuser"
+    tools {
+        // Uses Jenkins NodeJS plugin
+        nodejs "Node_20"
     }
 
     stages {
-
         stage('Verify Tools') {
             steps {
-                // Use NodeJS plugin for verification
-                nodejs(nodeJSInstallationName: 'Node_20') {
-                    sh '''
-                        echo "Docker version:"
-                        docker --version
-                        echo "Node version:"
-                        node -v
-                        echo "NPM version:"
-                        npm -v
-                        echo "Gradle version:"
-                        ./gradlew --version
-                    '''
+                sh '''
+                    echo "=== Docker Version ==="
+                    docker --version
+
+                    echo "=== NodeJS Version ==="
+                    node -v
+
+                    echo "=== NPM Version ==="
+                    npm -v
+
+                    echo "=== Gradle Wrapper Version ==="
+                    cd backend
+                    ./gradlew --version
+                '''
+            }
+        }
+
+        stage('Install Frontend Dependencies') {
+            steps {
+                dir('frontend') {
+                    sh 'npm install'
                 }
             }
         }
 
-        stage('Build Projects') {
-            parallel {
-                stage('Backend Build') {
-                    steps {
-                        dir('backend') {
-                            withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS')]) {
-                                sh './gradlew clean build --parallel --info -Dspring.datasource.password=$DB_PASS'
-                            }
-                        }
-                    }
+        stage('Build Frontend') {
+            steps {
+                dir('frontend') {
+                    sh 'npm run build'
                 }
+            }
+        }
 
-                stage('Frontend Build') {
-                    steps {
-                        dir('frontend') {
-                            // Wrap with NodeJS plugin
-                            nodejs(nodeJSInstallationName: 'Node_20') {
-                                sh 'npm ci && npm run build'
-                            }
-                        }
-                    }
+        stage('Build Backend') {
+            steps {
+                dir('backend') {
+                    sh './gradlew clean build -x test'
                 }
             }
         }
 
         stage('Docker Build & Push') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'docker-hub-pass',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
+                sh '''
+                    echo "Building Docker images..."
+                    docker build -t my-frontend ./frontend
+                    docker build -t my-backend ./backend
+
+                    echo "Cleaning up dangling images..."
+                    docker image prune -f
+                '''
+            }
+        }
+
+        stage('Deploy to Server') {
+            steps {
+                sshagent(['deploy-server-ssh']) {
                     sh '''
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        cd backend
-                        docker build --pull --no-cache -t "$DOCKER_USER/task-backend:latest" .
-                        docker push "$DOCKER_USER/task-backend:latest"
-                        cd ../frontend
-                        docker build --pull --no-cache -t "$DOCKER_USER/task-frontend:latest" .
-                        docker push "$DOCKER_USER/task-frontend:latest"
+                        ssh -o StrictHostKeyChecking=no ubuntu@35.244.27.174 "
+                            docker stop my-frontend || true &&
+                            docker rm my-frontend || true &&
+                            docker stop my-backend || true &&
+                            docker rm my-backend || true &&
+
+                            docker run -d -p 80:80 --name my-frontend my-frontend &&
+                            docker run -d -p 8080:8080 --name my-backend my-backend
+                        "
                     '''
                 }
             }
-        }
-
-        stage('Deploy to Production') {
-            steps {
-                sshagent(['gcp-prod-server']) {
-                    withCredentials([
-                        string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASS'),
-                        usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')
-                    ]) {
-                        sh """
-                            ssh -o StrictHostKeyChecking=no $SSH_USER@${PROD_SERVER} '
-                                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                                docker pull $DOCKER_USER/task-backend:latest
-                                docker pull $DOCKER_USER/task-frontend:latest
-                                docker stop task-backend || true && docker rm task-backend || true
-                                docker stop task-frontend || true && docker rm task-frontend || true
-                                docker run -d --name task-backend -p 8081:8081 \\
-                                    -e SPRING_DATASOURCE_URL=jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME} \\
-                                    -e SPRING_DATASOURCE_USERNAME=${DB_USER} \\
-                                    -e SPRING_DATASOURCE_PASSWORD=${DB_PASS} \\
-                                    $DOCKER_USER/task-backend:latest
-                                docker run -d --name task-frontend -p 80:80 $DOCKER_USER/task-frontend:latest
-                                docker system prune -f
-                            '
-                        """
-                    }
-                }
-            }
-        }
-
-    }
-
-    post {
-        always {
-            sh 'docker logout || true'
-            cleanWs()
         }
     }
 }
