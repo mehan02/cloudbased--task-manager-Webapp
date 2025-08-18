@@ -2,23 +2,24 @@ pipeline {
     agent any
 
     environment {
-        PATH = "${tool name: 'Node_20', type: 'NodeJS'}/bin:${env.PATH}"
+        NODEJS_HOME = tool name: 'Node_20', type: 'NodeJS'
+        PATH = "${env.NODEJS_HOME}/bin:${env.PATH}"
+        JAVA_HOME = tool name: 'Java17', type: 'jdk'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
     }
 
     stages {
+
         stage('Checkout SCM') {
             steps {
-                checkout([$class: 'GitSCM',
-                    branches: [[name: '*/main']],
-                    userRemoteConfigs: [[url: 'https://github.com/mehan02/cloudbased--task-manager-.git', credentialsId: 'github-pat']]
-                ])
+                checkout scm
             }
         }
 
         stage('Verify Tools') {
             steps {
                 sh '''
-                    echo === Versions ===
+                    echo "=== Versions ==="
                     docker --version
                     node -v
                     npm -v
@@ -30,7 +31,7 @@ pipeline {
         stage('Install Frontend Dependencies') {
             steps {
                 dir('frontend') {
-                    sh 'npm ci --no-audit'
+                    sh 'npm ci'
                 }
             }
         }
@@ -46,16 +47,21 @@ pipeline {
         stage('Build Backend') {
             steps {
                 dir('backend') {
-                    sh './gradlew clean build -x test --no-daemon'
+                    sh './gradlew clean build'
                 }
             }
         }
 
-        stage('Docker Build') {
+        stage('Docker Build Frontend') {
             steps {
                 dir('frontend') {
                     sh 'DOCKER_BUILDKIT=0 docker build -t my-frontend .'
                 }
+            }
+        }
+
+        stage('Docker Build Backend') {
+            steps {
                 dir('backend') {
                     sh 'DOCKER_BUILDKIT=0 docker build -t my-backend .'
                 }
@@ -64,20 +70,18 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASSWORD')]) {
-                    sh '''
-                        docker rm -f frontend backend || true
-                        docker run -d -p 80:80 --name frontend my-frontend
-                        docker run -d -p 8081:8081 --name backend -e DB_PASSWORD=$DB_PASSWORD my-backend
-                    '''
-                }
+                echo 'Deployment steps go here...'
+                // Example: sh 'docker run -d -p 80:80 my-frontend'
             }
         }
+
     }
 
     post {
         always {
-            cleanWs()
+            script {
+                cleanWs()
+            }
         }
     }
 }
