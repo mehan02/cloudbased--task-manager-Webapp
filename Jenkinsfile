@@ -248,56 +248,56 @@ def deployToProduction() {
     ]) {
         sshagent(['gcp-prod-server']) {
             sh """
-                ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} << 'REMOTE_SCRIPT'
+                ssh -o StrictHostKeyChecking=no ${PROD_USER}@${PROD_SERVER} "
                     set -e
-                    echo "🔐 Logging into Docker Hub..."
+                    echo '🔐 Logging into Docker Hub...'
                     echo '${DOCKER_PASSWORD}' | docker login -u '${DOCKER_USERNAME}' --password-stdin
                     
-                    echo "📥 Pulling latest Docker images..."
+                    echo '📥 Pulling latest Docker images...'
                     docker pull ${DOCKER_IMAGE_BACKEND}:latest
                     docker pull ${DOCKER_IMAGE_FRONTEND}:latest
                     
-                    echo "🛑 Stopping old containers..."
+                    echo '🛑 Stopping old containers...'
                     docker stop ${BACKEND_CONTAINER} || true
                     docker rm ${BACKEND_CONTAINER} || true
                     docker stop ${FRONTEND_CONTAINER} || true
                     docker rm ${FRONTEND_CONTAINER} || true
                     
-                    echo "🚀 Starting new Backend container..."
+                    echo '🚀 Starting new Backend container...'
                     docker run -d \\
                         --name ${BACKEND_CONTAINER} \\
                         --restart unless-stopped \\
                         -p ${BACKEND_PORT}:8081 \\
-                        -e SPRING_DATASOURCE_URL="jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}" \\
-                        -e SPRING_DATASOURCE_USERNAME="${DB_USER}" \\
-                        -e SPRING_DATASOURCE_PASSWORD="${DB_PASSWORD}" \\
+                        -e SPRING_DATASOURCE_URL='jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}' \\
+                        -e SPRING_DATASOURCE_USERNAME='${DB_USER}' \\
+                        -e SPRING_DATASOURCE_PASSWORD='${DB_PASSWORD}' \\
                         -e SPRING_PROFILES_ACTIVE=prod \\
-                        -e DB_PASS="${DB_PASSWORD}" \\
+                        -e DB_PASS='${DB_PASSWORD}' \\
                         ${DOCKER_IMAGE_BACKEND}:latest
                     
-                    echo "🚀 Starting new Frontend container..."
+                    echo '🚀 Starting new Frontend container...'
                     docker run -d \\
                         --name ${FRONTEND_CONTAINER} \\
                         --restart unless-stopped \\
                         -p ${FRONTEND_PORT}:80 \\
                         ${DOCKER_IMAGE_FRONTEND}:latest
                     
-                    echo "⏳ Waiting for containers to be ready..."
+                    echo '⏳ Waiting for containers to be ready...'
                     sleep 10
                     
-                    echo "🔍 Checking container status..."
+                    echo '🔍 Checking container status...'
                     docker ps
                     
-                    echo "⏳ Waiting for backend to be ready..."
+                    echo '⏳ Waiting for backend to be ready...'
                     sleep 15
                     
-                    echo "🔍 Testing backend connectivity..."
-                    curl -f http://localhost:${BACKEND_PORT}/actuator/health || echo "Backend health check failed"
+                    echo '🔍 Testing backend connectivity...'
+                    curl -f http://localhost:${BACKEND_PORT}/actuator/health || echo 'Backend health check failed'
                     
-                    echo "✅ Deployment completed!"
-                    echo "Backend API: http://${PROD_SERVER}:${BACKEND_PORT}"
-                    echo "Frontend: http://${PROD_SERVER}:${FRONTEND_PORT}"
-                REMOTE_SCRIPT
+                    echo '✅ Deployment completed!'
+                    echo 'Backend API: http://${PROD_SERVER}:${BACKEND_PORT}'
+                    echo 'Frontend: http://${PROD_SERVER}:${FRONTEND_PORT}'
+                "
             """
         }
     }
