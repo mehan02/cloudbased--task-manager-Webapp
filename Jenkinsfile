@@ -293,6 +293,7 @@ def deployToProduction() {
                         -e SPRING_DATASOURCE_PASSWORD='${DB_PASSWORD}' \
                         -e SPRING_PROFILES_ACTIVE=prod \
                         -e MANAGEMENT_METRICS_BINDERS_PROCESSOR_ENABLED=false \
+                        -e SPRING_AUTOCONFIGURE_EXCLUDE='org.springframework.boot.actuate.autoconfigure.metrics.SystemMetricsAutoConfiguration' \
                         -e FRONTEND_URL='http://${PROD_SERVER}' \
                         -e DB_PASS='${DB_PASSWORD}' \
                         ${DOCKER_IMAGE_BACKEND}:latest
