@@ -284,15 +284,17 @@ def deployToProduction() {
                     docker rm ${FRONTEND_CONTAINER} || true
                     
                     echo '🚀 Starting new Backend container...'
-                    docker run -d \\
-                        --name ${BACKEND_CONTAINER} \\
-                        --restart unless-stopped \\
-                        -p ${BACKEND_PORT}:8081 \\
-                        -e SPRING_DATASOURCE_URL='jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}' \\
-                        -e SPRING_DATASOURCE_USERNAME='${DB_USER}' \\
-                        -e SPRING_DATASOURCE_PASSWORD='${DB_PASSWORD}' \\
-                        -e SPRING_PROFILES_ACTIVE=prod \\
-                        -e DB_PASS='${DB_PASSWORD}' \\
+                    docker run -d \
+                        --name ${BACKEND_CONTAINER} \
+                        --restart unless-stopped \
+                        -p ${BACKEND_PORT}:8081 \
+                        -e SPRING_DATASOURCE_URL='jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}' \
+                        -e SPRING_DATASOURCE_USERNAME='${DB_USER}' \
+                        -e SPRING_DATASOURCE_PASSWORD='${DB_PASSWORD}' \
+                        -e SPRING_PROFILES_ACTIVE=prod \
+                        -e MANAGEMENT_METRICS_BINDERS_PROCESSOR_ENABLED=false \
+                        -e FRONTEND_URL='http://${PROD_SERVER}' \
+                        -e DB_PASS='${DB_PASSWORD}' \
                         ${DOCKER_IMAGE_BACKEND}:latest
                     
                     echo '🚀 Starting new Frontend container...'
