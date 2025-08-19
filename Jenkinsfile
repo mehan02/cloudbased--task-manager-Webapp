@@ -4,10 +4,9 @@ pipeline {
     environment {
         REMOTE_USER        = "samarajeewamehan"
         REMOTE_HOST       = "34.14.197.81"
-        BACKEND_DB_PASS   = credentials('cloudsql-db-pass')
-        DB_NAME           = "taskdb"
+        DB_NAME           = "taskmanager"
         DB_USER           = "taskuser"
-        DB_HOST           = "34.93.xx.xx"  // Cloud SQL public IP
+        DB_HOST           = "34.14.211.97"  // Cloud SQL public IP
         SSH_KEY           = "/var/lib/jenkins/.ssh/gcp-task-manager.pem"
         BACKEND_DIR       = "/home/${REMOTE_USER}/backend"
         FRONTEND_DIR      = "/home/${REMOTE_USER}/frontend"
@@ -32,66 +31,80 @@ pipeline {
         }
 
         stage('Deploy to Remote') {
+            environment {
+                BACKEND_DB_PASS = credentials('cloudsql-db-pass')
+            }
             steps {
-                sshDeployBackend()
-                sshDeployFrontend()
+                script {
+                    deployBackend()
+                    deployFrontend()
+                }
             }
         }
     }
 }
 
-// Custom functions for better modularity
-def sshDeployBackend() {
-    def dockerfile = '''
-        FROM openjdk:17-jdk-slim
-        COPY backend.jar app.jar
-        ENTRYPOINT ["java", "-jar", "/app.jar"]
-    '''.stripIndent()
+def deployBackend() {
+    withCredentials([string(credentialsId: 'cloudsql-db-pass', variable: 'DB_PASSWORD')]) {
+        def backendDockerfile = '''
+            FROM openjdk:17-jdk-slim
+            COPY backend.jar app.jar
+            ENTRYPOINT ["java", "-jar", "/app.jar"]
+        '''.stripIndent()
 
-    sh """
-        echo "=== Deploying Backend ==="
-        scp -i ${SSH_KEY} -o StrictHostKeyChecking=no \
-            backend/build/libs/*.jar \
-            ${REMOTE_USER}@${REMOTE_HOST}:${BACKEND_DIR}/backend.jar
+        sh '''
+            echo "=== Deploying Backend ==="
+            scp -i $SSH_KEY -o StrictHostKeyChecking=no \
+                backend/build/libs/*.jar \
+                $REMOTE_USER@$REMOTE_HOST:$BACKEND_DIR/backend.jar
+        '''
 
-        ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} << EOF
-            mkdir -p ${BACKEND_DIR}
-            cd ${BACKEND_DIR}
-            echo '${dockerfile}' > Dockerfile
-            docker build -t my-backend .
-            docker stop my-backend || true
-            docker rm my-backend || true
-            docker run -d --name my-backend -p 8080:8080 \\
-                -e SPRING_DATASOURCE_URL="jdbc:mysql://${DB_HOST}:3306/${DB_NAME}" \\
-                -e SPRING_DATASOURCE_USERNAME="${DB_USER}" \\
-                -e SPRING_DATASOURCE_PASSWORD="${BACKEND_DB_PASS}" \\
-                my-backend
-        EOF
-    """
+        sshagent(credentials: ['gcp-task-manager-ssh-key']) {
+            sh """
+                ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << 'REMOTE_SCRIPT'
+                    mkdir -p $BACKEND_DIR
+                    cd $BACKEND_DIR
+                    echo '${backendDockerfile}' > Dockerfile
+                    docker build -t my-backend .
+                    docker stop my-backend || true
+                    docker rm my-backend || true
+                    docker run -d --name my-backend -p 8080:8080 \\
+                        -e SPRING_DATASOURCE_URL="jdbc:mysql://$DB_HOST:3306/$DB_NAME" \\
+                        -e SPRING_DATASOURCE_USERNAME="$DB_USER" \\
+                        -e SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD" \\
+                        my-backend
+                REMOTE_SCRIPT
+            """
+        }
+    }
 }
 
-def sshDeployFrontend() {
-    def dockerfile = '''
+def deployFrontend() {
+    def frontendDockerfile = '''
         FROM nginx:alpine
         COPY . /usr/share/nginx/html
         EXPOSE 80
         CMD ["nginx", "-g", "daemon off;"]
     '''.stripIndent()
 
-    sh """
+    sh '''
         echo "=== Deploying Frontend ==="
-        scp -i ${SSH_KEY} -o StrictHostKeyChecking=no \
+        scp -i $SSH_KEY -o StrictHostKeyChecking=no \
             -r frontend/build/* \
-            ${REMOTE_USER}@${REMOTE_HOST}:${FRONTEND_DIR}/
+            $REMOTE_USER@$REMOTE_HOST:$FRONTEND_DIR/
+    '''
 
-        ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} << EOF
-            mkdir -p ${FRONTEND_DIR}
-            cd ${FRONTEND_DIR}
-            echo '${dockerfile}' > Dockerfile
-            docker build -t my-frontend .
-            docker stop my-frontend || true
-            docker rm my-frontend || true
-            docker run -d --name my-frontend -p 80:80 my-frontend
-        EOF
-    """
+    sshagent(credentials: ['gcp-task-manager-ssh-key']) {
+        sh """
+            ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST << 'REMOTE_SCRIPT'
+                mkdir -p $FRONTEND_DIR
+                cd $FRONTEND_DIR
+                echo '${frontendDockerfile}' > Dockerfile
+                docker build -t my-frontend .
+                docker stop my-frontend || true
+                docker rm my-frontend || true
+                docker run -d --name my-frontend -p 80:80 my-frontend
+            REMOTE_SCRIPT
+        """
+    }
 }
