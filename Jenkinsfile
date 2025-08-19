@@ -126,15 +126,35 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'docker-hub-pass', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
                         sh '''
-                            echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+                            echo "Debug: DOCKER_USERNAME length: ${#DOCKER_USERNAME}"
+                            echo "Debug: DOCKER_PASSWORD length: ${#DOCKER_PASSWORD}"
                             
-                            # Push Backend images
-                            docker push ${DOCKER_IMAGE_BACKEND}:${DOCKER_TAG}
-                            docker push ${DOCKER_IMAGE_BACKEND}:latest
+                            if [ -z "$DOCKER_USERNAME" ] || [ -z "$DOCKER_PASSWORD" ]; then
+                                echo "❌ Docker credentials are empty or not properly configured"
+                                echo "DOCKER_USERNAME: '$DOCKER_USERNAME'"
+                                echo "DOCKER_PASSWORD: '${DOCKER_PASSWORD:0:5}...'"
+                                exit 1
+                            fi
                             
-                            # Push Frontend images
-                            docker push ${DOCKER_IMAGE_FRONTEND}:${DOCKER_TAG}
-                            docker push ${DOCKER_IMAGE_FRONTEND}:latest
+                            echo "🔐 Attempting Docker Hub login..."
+                            echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+                            
+                            if [ $? -eq 0 ]; then
+                                echo "✅ Docker login successful"
+                                
+                                # Push Backend images
+                                echo "📤 Pushing backend images..."
+                                docker push ${DOCKER_IMAGE_BACKEND}:${DOCKER_TAG}
+                                docker push ${DOCKER_IMAGE_BACKEND}:latest
+                                
+                                # Push Frontend images
+                                echo "📤 Pushing frontend images..."
+                                docker push ${DOCKER_IMAGE_FRONTEND}:${DOCKER_TAG}
+                                docker push ${DOCKER_IMAGE_FRONTEND}:latest
+                            else
+                                echo "❌ Docker login failed"
+                                exit 1
+                            fi
                         '''
                     }
                 }
