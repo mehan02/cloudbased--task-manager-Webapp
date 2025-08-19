@@ -677,3 +677,153 @@ Hibernate:
         t1_0.user_id=? 
         and t1_0.due_date between ? and ?
 Found 0 tasks for today
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.email,
+        u1_0.password,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.email,
+        u1_0.password,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.email,
+        u1_0.password,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.email,
+        u1_0.password,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Today filter - Start: 2025-08-19T00:00, End: 2025-08-19T23:59:59.999999999
+Hibernate: 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.description,
+        t1_0.due_date,
+        t1_0.priority,
+        t1_0.sort_order,
+        t1_0.status,
+        t1_0.list_id,
+        t1_0.title,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=? 
+        and t1_0.due_date between ? and ?
+Hibernate: 
+    select
+        tl1_0.id,
+        tl1_0.color,
+        tl1_0.created_at,
+        tl1_0.description,
+        tl1_0.name,
+        tl1_0.updated_at,
+        tl1_0.user_id 
+    from
+        task_lists tl1_0 
+    where
+        tl1_0.user_id=? 
+    order by
+        tl1_0.created_at desc
+Found 0 tasks for today
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.email,
+        u1_0.password,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.email,
+        u1_0.password,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.email,
+        u1_0.password,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Hibernate: 
+    select
+        u1_0.id,
+        u1_0.email,
+        u1_0.password,
+        u1_0.username 
+    from
+        users u1_0 
+    where
+        u1_0.username=?
+Today filter - Start: 2025-08-19T00:00, End: 2025-08-19T23:59:59.999999999
+Hibernate: 
+    select
+        tl1_0.id,
+        tl1_0.color,
+        tl1_0.created_at,
+        tl1_0.description,
+        tl1_0.name,
+        tl1_0.updated_at,
+        tl1_0.user_id 
+    from
+        task_lists tl1_0 
+    where
+        tl1_0.user_id=? 
+    order by
+        tl1_0.created_at desc
+Hibernate: 
+    select
+        t1_0.id,
+        t1_0.completed_at,
+        t1_0.created_at,
+        t1_0.description,
+        t1_0.due_date,
+        t1_0.priority,
+        t1_0.sort_order,
+        t1_0.status,
+        t1_0.list_id,
+        t1_0.title,
+        t1_0.user_id 
+    from
+        tasks t1_0 
+    where
+        t1_0.user_id=? 
+        and t1_0.due_date between ? and ?
+Found 0 tasks for today
