@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+target/
+*.jar
+*.war
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Gradle
+.gradle/
+gradle-wrapper.jar
+
+# Git
+.git/
+.gitignore
