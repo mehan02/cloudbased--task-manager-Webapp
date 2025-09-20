@@ -81,4 +81,9 @@ public class AuthController {
             return ResponseEntity.badRequest().body("Login failed: " + e.getMessage());
         }
     }
+
+    @GetMapping("/test")
+    public ResponseEntity<String> testAuth() {
+        return ResponseEntity.ok("Auth controller is working!");
+    }
 }
