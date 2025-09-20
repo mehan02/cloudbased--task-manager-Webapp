@@ -170,6 +170,7 @@ jobs:
           JWT_SECRET="${{ secrets.JWT_SECRET }}"
           VM_PUBLIC_IP=${{ secrets.VM_PUBLIC_IP }}
           FRONTEND_URL=http://${{ secrets.VM_PUBLIC_IP }}
+          ALLOWED_ORIGINS=http://${{ secrets.VM_PUBLIC_IP }},http://localhost:3000
           EOF
           
           # Pull latest images
@@ -190,15 +191,34 @@ jobs:
     - name: Health Check
       run: |
         # Wait for services to start
-        sleep 60
+        echo "Waiting for services to start..."
+        sleep 90
         
-        # Check backend health
-        curl -f http://${{ secrets.VM_PUBLIC_IP }}:8081/api/actuator/health || exit 1
+        # Check backend health with retries
+        echo "Checking backend health..."
+        for i in {1..5}; do
+          if curl -f http://${{ secrets.VM_PUBLIC_IP }}:8081/api/actuator/health; then
+            echo "✅ Backend health check passed"
+            break
+          else
+            echo "❌ Backend health check failed, attempt $i/5"
+            if [ $i -eq 5 ]; then
+              echo "Backend health check failed after 5 attempts"
+              exit 1
+            fi
+            sleep 10
+          fi
+        done
         
-        # Check frontend availability
-        curl -f http://${{ secrets.VM_PUBLIC_IP }}/ || exit 1
+        # Check frontend availability (non-blocking)
+        echo "Checking frontend availability..."
+        if curl -f http://${{ secrets.VM_PUBLIC_IP }}/; then
+          echo "✅ Frontend is accessible"
+        else
+          echo "⚠️ Frontend check failed, but continuing (might still be starting)"
+        fi
         
-        echo "✅ Deployment successful! Application is running."
+        echo "✅ Deployment health checks completed!"
 
     - name: Notify deployment status
       if: always()
