@@ -212,4 +212,4 @@ jobs:
           echo "💊 Health Check: http://${{ secrets.VM_PUBLIC_IP }}:8081/api/actuator/health"
         else
           echo "❌ Deployment failed!"
-        fi
+        fi# Deployment ready
