@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/lists")
+@RequestMapping("/api/lists")
 @CrossOrigin(origins = "*")
 public class TaskListController {
 
@@ -39,9 +39,9 @@ public class TaskListController {
         if (user == null) {
             return ResponseEntity.status(401).build();
         }
-        
+
         List<TaskList> lists = taskListRepository.findByUserOrderByCreatedAtDesc(user);
-        
+
         // Create clean TaskList objects without circular references
         List<TaskList> cleanLists = lists.stream().map(list -> {
             TaskList cleanList = new TaskList();
@@ -53,19 +53,20 @@ public class TaskListController {
             cleanList.setUpdatedAt(list.getUpdatedAt());
             return cleanList;
         }).collect(java.util.stream.Collectors.toList());
-        
+
         return ResponseEntity.ok(cleanLists);
     }
 
     @PostMapping
-    public ResponseEntity<TaskList> createList(@RequestHeader("Authorization") String token, @RequestBody TaskList taskList) {
+    public ResponseEntity<TaskList> createList(@RequestHeader("Authorization") String token,
+            @RequestBody TaskList taskList) {
         User user = getUserFromToken(token);
         if (user == null) {
             return ResponseEntity.status(401).build();
         }
         taskList.setUser(user);
         TaskList savedList = taskListRepository.save(taskList);
-        
+
         // Create a clean TaskList object without circular references
         TaskList cleanList = new TaskList();
         cleanList.setId(savedList.getId());
@@ -74,12 +75,13 @@ public class TaskListController {
         cleanList.setColor(savedList.getColor());
         cleanList.setCreatedAt(savedList.getCreatedAt());
         cleanList.setUpdatedAt(savedList.getUpdatedAt());
-        
+
         return ResponseEntity.ok(cleanList);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<TaskList> updateList(@RequestHeader("Authorization") String token, @PathVariable Long id, @RequestBody Map<String, Object> updates) {
+    public ResponseEntity<TaskList> updateList(@RequestHeader("Authorization") String token, @PathVariable Long id,
+            @RequestBody Map<String, Object> updates) {
         User user = getUserFromToken(token);
         if (user == null) {
             return ResponseEntity.status(401).build();
@@ -101,7 +103,7 @@ public class TaskListController {
         }
 
         TaskList savedList = taskListRepository.save(taskList);
-        
+
         // Create a clean TaskList object without circular references
         TaskList cleanList = new TaskList();
         cleanList.setId(savedList.getId());
@@ -110,7 +112,7 @@ public class TaskListController {
         cleanList.setColor(savedList.getColor());
         cleanList.setCreatedAt(savedList.getCreatedAt());
         cleanList.setUpdatedAt(savedList.getUpdatedAt());
-        
+
         return ResponseEntity.ok(cleanList);
     }
 
