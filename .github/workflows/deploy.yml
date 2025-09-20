@@ -169,6 +169,7 @@ jobs:
           SQL_ADMIN_PASSWORD="${{ secrets.SQL_ADMIN_PASSWORD }}"
           JWT_SECRET="${{ secrets.JWT_SECRET }}"
           VM_PUBLIC_IP=${{ secrets.VM_PUBLIC_IP }}
+          FRONTEND_URL=http://${{ secrets.VM_PUBLIC_IP }}
           EOF
           
           # Pull latest images
@@ -209,4 +210,6 @@ jobs:
           echo "💊 Health Check: http://${{ secrets.VM_PUBLIC_IP }}:8081/api/actuator/health"
         else
           echo "❌ Deployment failed!"
-        fi# Deployment ready
+        fi
+        
+        # Deployment ready
