@@ -55,4 +55,11 @@ dependencyManagement {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	testLogging {
+		events "passed", "skipped", "failed"
+	}
+	reports {
+		html.required = true
+		junitXml.required = true
+	}
 }
