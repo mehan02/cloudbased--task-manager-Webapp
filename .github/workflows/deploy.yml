@@ -172,13 +172,13 @@ jobs:
           EOF
           
           # Pull latest images
-          docker-compose -f docker-compose.azure.yml pull
+          docker compose -f docker-compose.azure.yml pull
           
           # Stop existing containers
-          docker-compose -f docker-compose.azure.yml down
+          docker compose -f docker-compose.azure.yml down
           
           # Start new containers
-          docker-compose -f docker-compose.azure.yml up -d
+          docker compose -f docker-compose.azure.yml up -d
           
           # Clean up old images
           docker image prune -f
