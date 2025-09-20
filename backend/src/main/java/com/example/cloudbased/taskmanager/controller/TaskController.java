@@ -17,7 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/tasks")
+@RequestMapping("/tasks")
 @CrossOrigin(origins = "${frontend.url}")
 public class TaskController {
 

@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/lists")
+@RequestMapping("/lists")
 @CrossOrigin(origins = "*")
 public class TaskListController {
 
