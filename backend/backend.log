@@ -59,9 +59,11 @@ Hibernate: insert into users (email,password,username,id) values (?,?,?,default)
 Hibernate: select u1_0.id,u1_0.email,u1_0.password,u1_0.username from users u1_0 where u1_0.username=?
 Hibernate: select u1_0.id,u1_0.email,u1_0.password,u1_0.username from users u1_0 where u1_0.username=?
 Hibernate: select u1_0.id,u1_0.email,u1_0.password,u1_0.username from users u1_0 where u1_0.username=?
-lready in use.
-
-Action:
-
-Identify and stop the process that's listening on port 8081 or configure this application to listen on another port.
-
+2025-09-21T00:51:33.923+05:30  INFO 79006 --- [cloud-based-Task-manager] [ionShutdownHook] o.s.b.w.e.tomcat.GracefulShutdown        : Commencing graceful shutdown. Waiting for active requests to complete
+2025-09-21T00:51:34.128+05:30  INFO 79006 --- [cloud-based-Task-manager] [tomcat-shutdown] o.s.b.w.e.tomcat.GracefulShutdown        : Graceful shutdown complete
+2025-09-21T00:51:34.203+05:30  INFO 79006 --- [cloud-based-Task-manager] [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'
+Hibernate: drop table if exists task_lists cascade 
+Hibernate: drop table if exists tasks cascade 
+Hibernate: drop table if exists users cascade 
+2025-09-21T00:51:34.282+05:30  INFO 79006 --- [cloud-based-Task-manager] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2025-09-21T00:51:34.297+05:30  INFO 79006 --- [cloud-based-Task-manager] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
