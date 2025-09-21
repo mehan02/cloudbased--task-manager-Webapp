@@ -17,7 +17,7 @@ api.interceptors.request.use(config => {
       const currentTime = Date.now() / 1000;
       const timeUntilExpiry = payload.exp - currentTime;
       console.log('Token check - exp:', payload.exp, 'current:', currentTime, 'valid:', payload.exp > currentTime, 'timeUntilExpiry:', timeUntilExpiry);
-      
+
       // If token expires in less than 1 hour, show a gentle reminder
       if (timeUntilExpiry < 3600 && timeUntilExpiry > 0) {
         console.log('Token will expire soon, showing reminder');
@@ -46,7 +46,7 @@ api.interceptors.request.use(config => {
           </div>
         `;
         document.body.appendChild(notification);
-        
+
         // Remove notification after 5 seconds
         setTimeout(() => {
           if (notification.parentNode) {
@@ -54,7 +54,7 @@ api.interceptors.request.use(config => {
           }
         }, 5000);
       }
-      
+
       if (payload.exp < currentTime) {
         console.log('Token expired, clearing and redirecting to login');
         localStorage.removeItem('token');
@@ -75,7 +75,7 @@ api.interceptors.request.use(config => {
       }
       return Promise.reject(new Error('Invalid token'));
     }
-    
+
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -93,7 +93,7 @@ api.interceptors.response.use(
       console.log('Authentication error detected, clearing token and redirecting to login');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      
+
       // Show a more user-friendly message before redirecting
       if (window.location.pathname !== '/login') {
         // Use a more subtle notification instead of alert
@@ -122,14 +122,14 @@ api.interceptors.response.use(
           </div>
         `;
         document.body.appendChild(notification);
-        
+
         // Remove notification after 3 seconds
         setTimeout(() => {
           if (notification.parentNode) {
             notification.parentNode.removeChild(notification);
           }
         }, 3000);
-        
+
         // Redirect after a short delay
         setTimeout(() => {
           window.location.href = '/login';
